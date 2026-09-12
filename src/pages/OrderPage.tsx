@@ -24,6 +24,9 @@ type OrderStep =
   | 'review'
   | 'status';
 
+const MOCK_BEAN_CREDITS_AVAILABLE = 100;
+const MAX_BEAN_CREDIT_PERCENT = 0.5;
+
 export default function OrderPage() {
   const [cart, setCart] = useState<Record<string, number>>({});
 
@@ -48,6 +51,9 @@ export default function OrderPage() {
 
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState('');
+
+  const [beanCreditsToUse, setBeanCreditsToUse] =
+  useState('');
 
   const [showPaymentModal, setShowPaymentModal] =
     useState(false);
@@ -149,57 +155,11 @@ export default function OrderPage() {
     return `BB-${number}`;
   }
 
-  function confirmPayment() {
-    if (!paymentMethod) {
-      return;
-    }
-
-    const newOrder: Order = {
-      id: crypto.randomUUID(),
-
-      orderNumber: generateOrderNumber(),
-
-      customer: {
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-        whatsappNumber:
-          customer.whatsappNumber,
-      },
-
-      items: cartItems.map((item) => ({
-        menuItemId: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: cart[item.id],
-      })),
-
-      subtotal: totalPrice,
-
-      beanCreditsUsed: 0,
-
-      finalAmount: totalPrice,
-
-      paymentMethod,
-
-      status:
-        'awaiting_payment_confirmation',
-
-      createdAt: new Date().toISOString(),
-    };
-
-    setOrder(newOrder);
-
-    setShowPaymentModal(false);
-
-    setStep('status');
-  }
-
   const filteredMenuItems =
     menuItems.filter((item) => {
       const matchesTemperature =
         temperatureFilter === 'All' ||
-        item.temperature ===
-          temperatureFilter;
+        item.temperature === temperatureFilter;
 
       const matchesBrewMethod =
         brewFilter === 'All' ||
@@ -230,6 +190,70 @@ export default function OrderPage() {
         item.price * cart[item.id],
       0
     );
+  const maxCreditsAllowed = Math.min(
+    MOCK_BEAN_CREDITS_AVAILABLE,
+    Math.floor(totalPrice * MAX_BEAN_CREDIT_PERCENT)
+  );
+
+  const requestedBeanCredits =
+  Number(beanCreditsToUse || 0);
+
+  const beanCreditsUsed =
+      Math.min(
+    requestedBeanCredits,
+    maxCreditsAllowed
+  );
+
+  const finalAmount =
+    Math.max(
+      totalPrice - beanCreditsUsed,
+      0
+    );
+
+  function confirmPayment() {
+    if (!paymentMethod) {
+      return;
+    }
+
+    const newOrder: Order = {
+      id: crypto.randomUUID(),
+
+      orderNumber: generateOrderNumber(),
+
+      customer: {
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        whatsappNumber:
+          customer.whatsappNumber,
+      },
+
+      items: cartItems.map((item) => ({
+        menuItemId: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: cart[item.id],
+      })),
+
+      subtotal: totalPrice,
+
+      beanCreditsUsed,
+
+      finalAmount,
+
+      paymentMethod,
+
+      status:
+        'awaiting_payment_confirmation',
+
+      createdAt: new Date().toISOString(),
+    };
+
+    setOrder(newOrder);
+
+    setShowPaymentModal(false);
+
+    setStep('status');
+  }
 
   if (step === 'customer') {
     return (
@@ -271,6 +295,14 @@ export default function OrderPage() {
           cart={cart}
           totalItems={totalItems}
           totalPrice={totalPrice}
+          beanCreditsAvailable={MOCK_BEAN_CREDITS_AVAILABLE}
+          maxCreditsAllowed={maxCreditsAllowed}
+          beanCreditsToUse={beanCreditsToUse}
+          beanCreditsUsed={beanCreditsUsed}
+          finalAmount={finalAmount}
+          onBeanCreditsChange={(value: string) => {
+            setBeanCreditsToUse(value);
+            }}
           onBack={() =>
             setStep('menu')
           }
@@ -281,7 +313,7 @@ export default function OrderPage() {
 
         {showPaymentModal && (
           <PaymentModal
-            amount={totalPrice}
+            amount={finalAmount}
             paymentMethod={
               paymentMethod
             }
@@ -926,6 +958,15 @@ type OrderReviewProps = {
   cart: Record<string, number>;
   totalItems: number;
   totalPrice: number;
+
+  beanCreditsAvailable: number;
+  maxCreditsAllowed: number;
+  beanCreditsToUse: string;
+  beanCreditsUsed: number;
+  finalAmount: number;
+  onBeanCreditsChange: (
+    value: string
+  ) => void;
   onBack: () => void;
   onPayNow: () => void;
 };
@@ -935,6 +976,12 @@ function OrderReview({
   cart,
   totalItems,
   totalPrice,
+  beanCreditsAvailable,
+  maxCreditsAllowed,
+  beanCreditsToUse,
+  beanCreditsUsed,
+  finalAmount,
+  onBeanCreditsChange,
   onBack,
   onPayNow,
 }: OrderReviewProps) {
@@ -1045,9 +1092,9 @@ function OrderReview({
         </div>
       </div>
 
-      <div className="mt-5 rounded-xl border border-dashed border-gray-300 p-5 dark:border-gray-700">
+      <div className="mt-5 rounded-xl border border-gray-200 p-5 dark:border-gray-800">
 
-        <div className="flex justify-between">
+        <div className="flex items-start justify-between gap-4">
 
           <div>
             <h2 className="font-semibold">
@@ -1055,21 +1102,97 @@ function OrderReview({
             </h2>
 
             <p className="mt-1 text-sm text-gray-500">
-              No Bean Credits linked
-              yet.
+              You have ₹
+              {beanCreditsAvailable}{' '}
+              available.
+            </p>
+            <p className="mt-1 text-sm text-gray-500">
+              You can use up to ₹{maxCreditsAllowed}{' '}
+              on this order.
             </p>
           </div>
+            <div className="relative flex-1">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
+                ₹
+              </span>
 
-          <strong>₹0</strong>
+              <input
+                type="number"
+                min={0}
+                max={maxCreditsAllowed}
+                value={beanCreditsToUse}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === '') {
+                    onBeanCreditsChange('');
+                    return;
+                  }
+                  const numericValue = Number(value);
+                    if (
+                      numericValue >= 0 &&
+                      numericValue <= maxCreditsAllowed
+                    ) {
+                      onBeanCreditsChange(value);
+                    }
+                  }
+                }
+                className="min-h-12 w-full rounded-lg border border-gray-300 bg-white pl-8 pr-4 dark:border-gray-700 dark:bg-gray-950"
+              />
+            </div>
+
+          <button
+            type="button"
+            onClick={() =>
+             onBeanCreditsChange(
+                String(maxCreditsAllowed)
+              )
+            }
+            disabled={
+              maxCreditsAllowed === 0
+            }
+            className="min-h-12 rounded-lg border border-gray-300 px-4 font-medium disabled:opacity-40 dark:border-gray-700"
+          >
+            Use max
+          </button>
 
         </div>
+
+        {beanCreditsUsed > 0 && (
+          <div className="mt-4 flex justify-between border-t border-gray-200 pt-4 text-sm dark:border-gray-800">
+
+            <span className="text-gray-500">
+              Bean Credits applied
+            </span>
+
+            <span className="font-medium">
+              − ₹{beanCreditsUsed}
+            </span>
+
+          </div>
+        )}
+
       </div>
 
-      <div className="mt-6 flex justify-between text-xl font-semibold">
+      <div className="mt-6 space-y-3">
 
-        <span>Amount to pay</span>
+        <div className="flex justify-between text-sm text-gray-500">
+          <span>Subtotal</span>
+          <span>₹{totalPrice}</span>
+        </div>
 
-        <span>₹{totalPrice}</span>
+        {beanCreditsUsed > 0 && (
+          <div className="flex justify-between text-sm">
+            <span>Bean Credits</span>
+            <span>
+              − ₹{beanCreditsUsed}
+            </span>
+          </div>
+        )}
+
+        <div className="flex justify-between border-t border-gray-200 pt-4 text-xl font-semibold dark:border-gray-800">
+          <span>Amount to pay</span>
+          <span>₹{finalAmount}</span>
+        </div>
 
       </div>
 
@@ -1294,6 +1417,31 @@ function OrderStatusPage({
               }
             </span>
           </div>
+
+          <div className="mt-3 flex justify-between text-sm">
+            <span className="text-gray-500">
+              Subtotal
+            </span>
+
+            <span className="font-medium">
+              ₹{order.subtotal}
+            </span>
+          </div>
+
+          {order.beanCreditsUsed > 0 && (
+            <div className="mt-3 flex justify-between text-sm">
+
+              <span className="text-gray-500">
+                Bean Credits
+              </span>
+
+              <span className="font-medium">
+                − ₹
+                {order.beanCreditsUsed}
+              </span>
+
+            </div>
+          )}
 
           <div className="mt-3 flex justify-between text-sm">
             <span className="text-gray-500">
