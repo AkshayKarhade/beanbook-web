@@ -1,10 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { menuItems } from '../data/menu';
 
 import type {
   BrewMethod,
   DrinkTemperature,
 } from '../types/menu';
+
+import PhoneInput, {
+  isValidPhoneNumber,
+} from 'react-phone-number-input';
+
+import 'react-phone-number-input/style.css';
 
 import type { Customer } from '../types/customer';
 
@@ -49,8 +55,13 @@ export default function OrderPage() {
     whatsappVerified: false,
   });
 
+  const [customerError, setCustomerError] =
+    useState('');
   const [otp, setOtp] = useState('');
   const [otpError, setOtpError] = useState('');
+
+  const [resendSeconds, setResendSeconds] =
+  useState(30);
 
   const [beanCreditsToUse, setBeanCreditsToUse] =
   useState('');
@@ -70,6 +81,21 @@ export default function OrderPage() {
       [itemId]: (currentCart[itemId] ?? 0) + 1,
     }));
   }
+
+useEffect(() => {
+  if (resendSeconds <= 0) {
+    return;
+  }
+
+  const timer = window.setTimeout(() => {
+    setResendSeconds(
+      (current) => current - 1
+    );
+  }, 1000);
+
+  return () =>
+    window.clearTimeout(timer);
+}, [resendSeconds]);
 
   function removeItem(itemId: string) {
     setCart((currentCart) => {
@@ -116,37 +142,69 @@ export default function OrderPage() {
     setStep('customer');
   }
 
-  function sendOtp() {
-    if (
-      !customer.firstName.trim() ||
-      !customer.lastName.trim() ||
-      !customer.whatsappNumber.trim()
-    ) {
-      return;
-    }
-
-    setOtp('');
-    setOtpError('');
-    setStep('verify');
-  }
-
-  function verifyOtp() {
-    if (otp === '123456') {
-      setCustomer((currentCustomer) => ({
-        ...currentCustomer,
-        whatsappVerified: true,
-      }));
-
-      setOtpError('');
-      setStep('review');
-
-      return;
-    }
-
-    setOtpError(
-      'That code is incorrect. Try 123456 for now.'
+function sendOtp() {
+  if (!customer.firstName.trim()) {
+    setCustomerError(
+      'Please enter your first name.'
     );
+    return;
   }
+
+  if (!customer.lastName.trim()) {
+    setCustomerError(
+      'Please enter your last name.'
+    );
+    return;
+  }
+
+  if (
+    !customer.whatsappNumber ||
+    !isValidPhoneNumber(
+      customer.whatsappNumber
+    )
+  ) {
+    setCustomerError(
+      'Please enter a valid WhatsApp number.'
+    );
+    return;
+  }
+
+  setCustomerError('');
+  setOtp('');
+  setOtpError('');
+  setResendSeconds(30);
+  setStep('verify');
+}
+
+function resendOtp() {
+  if (resendSeconds > 0) {
+    return;
+  }
+
+  setOtp('');
+  setOtpError('');
+  setResendSeconds(30);
+
+  // Real WhatsApp OTP sending will go here later.
+}
+
+function verifyOtp() {
+  if (otp === '123456') {
+    setCustomer((currentCustomer) => ({
+      ...currentCustomer,
+      whatsappVerified: true,
+    }));
+
+    setOtpError('');
+    setStep('review');
+
+    return;
+  }
+
+  setOtpError(
+    'That code is incorrect. Try 123456 for now.'
+  );
+}
 
   function generateOrderNumber() {
     const number =
@@ -259,6 +317,7 @@ export default function OrderPage() {
     return (
       <CustomerDetails
         customer={customer}
+        error={customerError}
         onChange={updateCustomer}
         onBack={() => setStep('menu')}
         onSendOtp={sendOtp}
@@ -274,15 +333,13 @@ export default function OrderPage() {
         }
         otp={otp}
         error={otpError}
+        resendSeconds={resendSeconds}
         onOtpChange={setOtp}
         onVerify={verifyOtp}
         onBack={() =>
           setStep('customer')
         }
-        onResend={() => {
-          setOtp('');
-          setOtpError('');
-        }}
+        onResend={resendOtp}
       />
     );
   }
@@ -742,6 +799,7 @@ function CartSummary({
 
 type CustomerDetailsProps = {
   customer: Customer;
+  error: string;
 
   onChange: (
     field:
@@ -757,14 +815,15 @@ type CustomerDetailsProps = {
 
 function CustomerDetails({
   customer,
+  error,
   onChange,
   onBack,
   onSendOtp,
 }: CustomerDetailsProps) {
   const canContinue =
-    customer.firstName.trim() &&
-    customer.lastName.trim() &&
-    customer.whatsappNumber.trim();
+    customer.firstName.trim().length > 0 &&
+    customer.lastName.trim().length > 0 &&
+    customer.whatsappNumber.trim().length > 0;
 
   return (
     <div className="mx-auto max-w-xl">
@@ -829,21 +888,25 @@ function CustomerDetails({
           <label className="mb-2 block text-sm font-medium">
             WhatsApp number
           </label>
-
-          <input
-            type="tel"
-            value={
-              customer.whatsappNumber
-            }
-            onChange={(event) =>
-              onChange(
-                'whatsappNumber',
-                event.target.value
-              )
-            }
-            className="min-h-12 w-full rounded-lg border border-gray-300 bg-white px-4 dark:border-gray-700 dark:bg-gray-950"
-            placeholder="+91 98765 43210"
-          />
+          {error && (
+              <p className="mt-2 text-sm text-red-600">
+                {error}
+              </p>
+            )}  
+          <div className="rounded-lg border border-gray-300 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-950">
+            <PhoneInput
+              international
+              defaultCountry="IN"
+              value={customer.whatsappNumber}
+              onChange={(value) =>
+                onChange(
+                  'whatsappNumber',
+                  value ?? ''
+                )
+              }
+              placeholder="Enter WhatsApp number"
+            />
+          </div>
         </div>
 
         <button
@@ -864,6 +927,8 @@ type OtpVerificationProps = {
   whatsappNumber: string;
   otp: string;
   error: string;
+  resendSeconds: number;
+
   onOtpChange: (value: string) => void;
   onVerify: () => void;
   onBack: () => void;
@@ -874,11 +939,17 @@ function OtpVerification({
   whatsappNumber,
   otp,
   error,
+  resendSeconds,
   onOtpChange,
   onVerify,
   onBack,
   onResend,
 }: OtpVerificationProps) {
+    const visibleDigits =
+    whatsappNumber.slice(-4);
+
+  const maskedNumber =
+    `••••••${visibleDigits}`;
   return (
     <div className="mx-auto max-w-xl">
 
@@ -897,7 +968,7 @@ function OtpVerification({
       <p className="mt-2 text-gray-600 dark:text-gray-400">
         We sent a 6-digit code to{' '}
         <strong>
-          {whatsappNumber}
+          {maskedNumber}
         </strong>
       </p>
 
@@ -943,9 +1014,16 @@ function OtpVerification({
         <button
           type="button"
           onClick={onResend}
-          className="mt-4 w-full text-sm text-gray-600 hover:underline dark:text-gray-400"
+          disabled={resendSeconds > 0}
+          className={`mt-4 w-full rounded-lg px-4 py-3 text-sm font-medium transition ${
+            resendSeconds > 0
+            ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-900 dark:text-gray-600'
+            : 'bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200'
+          }`}
         >
-          Resend code
+          {resendSeconds > 0
+            ? `Resend code in ${resendSeconds}s`
+            : 'Resend code'}
         </button>
 
       </div>
