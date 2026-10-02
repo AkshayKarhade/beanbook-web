@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { QRCodeSVG } from 'qrcode.react';
 
 import type {
   BrewMethod,
@@ -21,9 +20,6 @@ import type {
   OrderStatus,
   PaymentMethod,
 } from '../types/order';
-
-const TEMP_UPI_PAYEE_NAME = 'The 8th Coffee Bean';
-const TEMP_UPI_ID = 'akshaykarhade@okicici';
 
 type TemperatureFilter = 'All' | DrinkTemperature;
 type BrewFilter = 'All' | BrewMethod;
@@ -57,8 +53,8 @@ type OrderStep =
   | 'review'
   | 'status';
 
-const MOCK_BEAN_CREDITS_AVAILABLE = 100;
-const MAX_BEAN_CREDIT_PERCENT = 0.5;
+const MOCK_BEAN_CREDITS_AVAILABLE = 0;
+const MAX_BEAN_CREDIT_PERCENT = 0;
 
 export default function OrderPage() {
   const { eventSlug } = useParams();
@@ -299,12 +295,6 @@ function verifyOtp() {
   );
 }
 
-  function generateOrderNumber() {
-    const number =
-      Math.floor(Math.random() * 900) + 100;
-
-    return `BB-${number}`;
-  }
   const hasTemperatureData =
     menuItems.some(
       (item) => item.temperature !== undefined
@@ -369,49 +359,202 @@ function verifyOtp() {
       0
     );
 
-  function confirmPayment() {
-    if (!paymentMethod) {
+  async function confirmPayment() {
+    if (!eventSlug) {
+      window.alert(
+        'This order link is missing its event.'
+      );
       return;
     }
 
-    const newOrder: Order = {
-      id: crypto.randomUUID(),
+    setPaymentMethod('razorpay');
 
-      orderNumber: generateOrderNumber(),
+    try {
+      const createResponse = await fetch(
+        '/api/create-razorpay-order',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            eventSlug,
+            customer: {
+              firstName: customer.firstName,
+              lastName: customer.lastName,
+              whatsappNumber:
+                customer.whatsappNumber,
+            },
+            items: cartItems.map((item) => ({
+              menuItemId: item.id,
+              quantity: cart[item.id],
+            })),
+            paymentMethod: 'razorpay',
+          }),
+        }
+      );
 
-      customer: {
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-        whatsappNumber:
-          customer.whatsappNumber,
-      },
+      const created =
+        await createResponse.json();
 
-      items: cartItems.map((item) => ({
-        menuItemId: item.id,
-        name: item.name,
-        price: item.price,
-        quantity: cart[item.id],
-      })),
+      if (!createResponse.ok) {
+        throw new Error(
+          created.error ||
+            created.details ||
+            'Could not create payment order.'
+        );
+      }
 
-      subtotal: totalPrice,
+      const checkoutWindow =
+        window as unknown as {
+          Razorpay?: new (
+            options: Record<string, unknown>
+          ) => {
+            open: () => void;
+          };
+        };
 
-      beanCreditsUsed,
+      if (!checkoutWindow.Razorpay) {
+        throw new Error(
+          'Razorpay Checkout could not be loaded.'
+        );
+      }
 
-      finalAmount,
+      const pendingOrder: Order = {
+        id: created.beanbookOrderId,
+        orderNumber: created.orderNumber,
+        customer: {
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          whatsappNumber:
+            customer.whatsappNumber,
+        },
+        items: cartItems.map((item) => ({
+          menuItemId: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: cart[item.id],
+        })),
+        subtotal: totalPrice,
+        beanCreditsUsed: 0,
+        finalAmount: totalPrice,
+        paymentMethod: 'razorpay',
+        status: 'awaiting_payment',
+        createdAt: new Date().toISOString(),
+      };
 
-      paymentMethod,
+      const checkout =
+        new checkoutWindow.Razorpay({
+          key: created.keyId,
+          amount: created.amount,
+          currency: created.currency,
+          name: brandName || 'BeanBook',
+          description:
+            eventName || 'BeanBook order',
+          order_id: created.razorpayOrderId,
+          prefill: {
+            name:
+              `${customer.firstName} ${customer.lastName}`,
+            contact:
+              customer.whatsappNumber,
+          },
+          handler: async (
+            paymentResponse: {
+              razorpay_order_id: string;
+              razorpay_payment_id: string;
+              razorpay_signature: string;
+            }
+          ) => {
+            setShowPaymentModal(false);
+            setOrder({
+              ...pendingOrder,
+              status:
+                'awaiting_payment_confirmation',
+            });
+            setStep('status');
 
-      status:
-        'awaiting_payment_confirmation',
+            for (
+              let attempt = 0;
+              attempt < 10;
+              attempt += 1
+            ) {
+              const verifyResponse = await fetch(
+                '/api/verify-razorpay-payment',
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type':
+                      'application/json',
+                  },
+                  body: JSON.stringify(
+                    paymentResponse
+                  ),
+                }
+              );
 
-      createdAt: new Date().toISOString(),
-    };
+              const verified =
+                await verifyResponse.json();
 
-    setOrder(newOrder);
+              if (
+                verifyResponse.ok &&
+                verified.verified === true
+              ) {
+                setOrder((currentOrder) =>
+                  currentOrder
+                    ? {
+                        ...currentOrder,
+                        status: 'paid',
+                      }
+                    : currentOrder
+                );
+                return;
+              }
 
-    setShowPaymentModal(false);
+              if (verifyResponse.status !== 202) {
+                throw new Error(
+                  verified.error ||
+                    'Payment verification failed.'
+                );
+              }
 
-    setStep('status');
+              setOrder((currentOrder) =>
+                currentOrder
+                  ? {
+                      ...currentOrder,
+                      status:
+                        'awaiting_bank_confirmation',
+                    }
+                  : currentOrder
+              );
+
+              await new Promise((resolve) =>
+                window.setTimeout(resolve, 2000)
+              );
+            }
+          },
+          modal: {
+            ondismiss: () => {
+              setPaymentMethod(null);
+            },
+          },
+          theme: {
+            color: '#222222',
+          },
+        });
+
+      checkout.open();
+    } catch (error) {
+      console.error(
+        'Could not start Razorpay payment:',
+        error
+      );
+
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : 'Could not start payment.'
+      );
+    }
   }
   if (menuLoading) {
     return (
@@ -487,9 +630,10 @@ function verifyOtp() {
           onBack={() =>
             setStep('menu')
           }
-          onPayNow={() =>
-            setShowPaymentModal(true)
-          }
+          onPayNow={() => {
+            setPaymentMethod('razorpay');
+            setShowPaymentModal(true);
+          }}
         />
 
         {showPaymentModal && (
@@ -1419,15 +1563,12 @@ function OrderReview({
 
 type PaymentModalProps = {
   amount: number;
-
   paymentMethod:
     | PaymentMethod
     | null;
-
   onSelectMethod: (
     method: PaymentMethod
   ) => void;
-
   onClose: () => void;
   onConfirm: () => void;
 };
@@ -1439,14 +1580,17 @@ function PaymentModal({
   onClose,
   onConfirm,
 }: PaymentModalProps) {
-  const upiUrl =
-  `upi://pay?pa=${encodeURIComponent(TEMP_UPI_ID)}` +
-  `&pn=${encodeURIComponent(TEMP_UPI_PAYEE_NAME)}` +
-  `&am=${amount.toFixed(2)}` +
-  `&cu=INR`;
+  useEffect(() => {
+    if (paymentMethod !== 'razorpay') {
+      onSelectMethod('razorpay');
+    }
+  }, [
+    paymentMethod,
+    onSelectMethod,
+  ]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-
       <button
         type="button"
         aria-label="Close payment"
@@ -1455,19 +1599,16 @@ function PaymentModal({
       />
 
       <div className="relative z-10 w-full rounded-t-2xl bg-white p-5 shadow-2xl dark:bg-gray-950 sm:max-w-lg sm:rounded-2xl sm:p-6">
-
         <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-gray-300 sm:hidden dark:bg-gray-700" />
 
         <div className="flex items-start justify-between">
-
           <div>
             <h2 className="text-xl font-semibold">
               Pay ₹{amount}
             </h2>
 
             <p className="mt-1 text-sm text-gray-500">
-              How would you like to
-              pay?
+              Pay securely using Razorpay.
             </p>
           </div>
 
@@ -1478,122 +1619,33 @@ function PaymentModal({
           >
             ×
           </button>
-
         </div>
 
-        <div className="mt-6 space-y-3">
+        <div className="mt-6 rounded-xl bg-gray-100 p-4 dark:bg-gray-900">
+          <p className="font-medium">
+            Razorpay Checkout
+          </p>
 
-          <button
-            type="button"
-            onClick={() =>
-              onSelectMethod(
-                'table_qr'
-              )
-            }
-            className={`w-full rounded-xl border p-5 text-left ${
-              paymentMethod ===
-              'table_qr'
-                ? 'border-gray-900 bg-gray-50 dark:border-white dark:bg-gray-900'
-                : 'border-gray-200 dark:border-gray-800'
-            }`}
-          >
-            <p className="font-semibold">
-              Scan the QR on the table
-            </p>
-
-            <p className="mt-1 text-sm text-gray-500">
-              Scan the payment QR
-              displayed at the stall.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              onSelectMethod(
-                'upi_app'
-              )
-            }
-            className={`w-full rounded-xl border p-5 text-left ${
-              paymentMethod ===
-              'upi_app'
-                ? 'border-gray-900 bg-gray-50 dark:border-white dark:bg-gray-900'
-                : 'border-gray-200 dark:border-gray-800'
-            }`}
-          >
-            <p className="font-semibold">
-              Pay using UPI app
-            </p>
-
-            <p className="mt-1 text-sm text-gray-500">
-              Use your preferred UPI
-              app on this phone.
-            </p>
-          </button>
-
+          <p className="mt-1 text-sm text-gray-500">
+            UPI and other enabled payment methods
+            will be shown inside Razorpay Checkout.
+            BeanBook will confirm the payment
+            automatically.
+          </p>
         </div>
-
-        {paymentMethod && (
-          <div className="mt-6 rounded-xl bg-gray-100 p-4 dark:bg-gray-900">
-
-            {paymentMethod ===
-            'table_qr' ? (
-              <>
-                <p className="font-medium">
-                  Scan the QR on the
-                  table
-                </p>
-
-                <p className="mt-1 text-sm text-gray-500">
-                  Pay exactly ₹
-                  {amount}, then return
-                  here.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="font-medium">
-                  Pay ₹{amount} using
-                  your UPI app
-                </p>
-
-                <div className="mt-4 space-y-4">
-                  <QRCodeSVG
-                    value={upiUrl}
-                    size={180}
-                    className="mx-auto bg-white p-2"
-                  />
-
-                  <a
-                    href={upiUrl}
-                    className="block w-full rounded-xl bg-gray-900 px-4 py-3 text-center font-medium text-white dark:bg-white dark:text-gray-900"
-                  >
-                    Open UPI app
-                  </a>
-
-                  <p className="text-center text-xs text-gray-500">
-                    UPI ID: {TEMP_UPI_ID}
-                  </p>
-                </div>
-              </>
-            )}
-
-          </div>
-        )}
 
         <button
           type="button"
-          disabled={!paymentMethod}
           onClick={onConfirm}
-          className="mt-6 min-h-14 w-full rounded-xl bg-gray-900 px-4 py-3 text-lg font-medium text-white disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-gray-900"
+          className="mt-6 min-h-14 w-full rounded-xl bg-gray-900 px-4 py-3 text-lg font-medium text-white dark:bg-white dark:text-gray-900"
         >
-          I've completed the payment
+          Pay ₹{amount} securely
         </button>
 
         <p className="mt-3 text-center text-xs text-gray-500">
-          We'll verify the payment before confirming your order.
+          Your order is confirmed only after
+          Razorpay verifies the payment.
         </p>
-
       </div>
     </div>
   );
@@ -1686,9 +1738,12 @@ function OrderStatusPage({
 
             <span className="font-medium">
               {order.paymentMethod ===
-              'table_qr'
-                ? 'Table QR'
-                : 'UPI App'}
+              'razorpay'
+                ? 'Razorpay'
+                : order.paymentMethod ===
+                    'table_qr'
+                  ? 'Table QR'
+                  : 'UPI App'}
             </span>
           </div>
 
