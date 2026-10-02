@@ -1,6 +1,5 @@
 import Razorpay from 'razorpay';
 import { supabaseAdmin } from '../lib/supabase-server';
-import { menuItems } from '../src/data/menu';
 
 type RequestItem = {
   menuItemId: string;
@@ -41,7 +40,18 @@ export default {
       const requestItems =
         body?.items as RequestItem[] | undefined;
 
+      const eventSlug = body?.eventSlug;
       const paymentMethod = body?.paymentMethod;
+
+      if (
+        typeof eventSlug !== 'string' ||
+        !eventSlug.trim()
+      ) {
+        return Response.json(
+          { error: 'Event is required' },
+          { status: 400 }
+        );
+      }
 
       if (
         !customer ||
@@ -60,10 +70,7 @@ export default {
         );
       }
 
-      if (
-        paymentMethod !== 'table_qr' &&
-        paymentMethod !== 'upi_app'
-      ) {
+      if (paymentMethod !== 'razorpay') {
         return Response.json(
           { error: 'Invalid payment method' },
           { status: 400 }
@@ -80,45 +87,112 @@ export default {
         );
       }
 
+      const {
+        data: event,
+        error: eventError,
+      } = await supabaseAdmin
+        .from('events')
+        .select('id, brand_id, slug')
+        .eq('slug', eventSlug.trim())
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (eventError) {
+        throw eventError;
+      }
+
+      if (!event) {
+        return Response.json(
+          { error: 'Event not found or inactive' },
+          { status: 404 }
+        );
+      }
+
       const seenItemIds = new Set<string>();
+
+      for (const requestItem of requestItems) {
+        if (
+          typeof requestItem?.menuItemId !== 'string' ||
+          !Number.isInteger(requestItem.quantity) ||
+          requestItem.quantity < 1 ||
+          requestItem.quantity > 20
+        ) {
+          return Response.json(
+            { error: 'Invalid order item' },
+            { status: 400 }
+          );
+        }
+
+        if (seenItemIds.has(requestItem.menuItemId)) {
+          return Response.json(
+            { error: 'Duplicate menu item in order' },
+            { status: 400 }
+          );
+        }
+
+        seenItemIds.add(requestItem.menuItemId);
+      }
+
+      const itemIds = Array.from(seenItemIds);
+
+      const {
+        data: products,
+        error: productsError,
+      } = await supabaseAdmin
+        .from('products')
+        .select('id, name, price, is_active')
+        .eq('brand_id', event.brand_id)
+        .eq('is_active', true)
+        .in('id', itemIds);
+
+      if (productsError) {
+        throw productsError;
+      }
+
+      if (!products || products.length !== itemIds.length) {
+        return Response.json(
+          {
+            error:
+              'One or more products are unavailable for this event',
+          },
+          { status: 400 }
+        );
+      }
+
+      const productsById = new Map(
+        products.map((product) => [
+          product.id,
+          product,
+        ])
+      );
 
       const orderItems = requestItems.map(
         (requestItem) => {
-          if (
-            typeof requestItem.menuItemId !== 'string' ||
-            !Number.isInteger(requestItem.quantity) ||
-            requestItem.quantity < 1 ||
-            requestItem.quantity > 20
-          ) {
-            throw new Error('Invalid order item');
-          }
+          const product =
+            productsById.get(requestItem.menuItemId);
 
-          if (
-            seenItemIds.has(requestItem.menuItemId)
-          ) {
+          if (!product) {
             throw new Error(
-              'Duplicate menu item in order'
+              'Product validation failed'
             );
           }
 
-          seenItemIds.add(requestItem.menuItemId);
+          const priceRupees = Number(product.price);
 
-          const menuItem = menuItems.find(
-            (item) =>
-              item.id === requestItem.menuItemId
-          );
-
-          if (!menuItem || !menuItem.available) {
+          if (
+            !Number.isFinite(priceRupees) ||
+            priceRupees <= 0
+          ) {
             throw new Error(
-              `Menu item is unavailable: ${requestItem.menuItemId}`
+              `Invalid price for product: ${product.id}`
             );
           }
 
           return {
-            menuItemId: menuItem.id,
-            name: menuItem.name,
+            menuItemId: product.id,
+            name: product.name,
             unitPricePaise:
-              Math.round(menuItem.price * 100),
+              Math.round(priceRupees * 100),
             quantity: requestItem.quantity,
           };
         }
@@ -131,19 +205,7 @@ export default {
         0
       );
 
-      // Bean Credits are intentionally disabled
-      // until we have a real server-side credit ledger.
-      const beanCreditsUsedPaise = 0;
-
-      const finalAmountPaise =
-        subtotalPaise - beanCreditsUsedPaise;
-
-      if (finalAmountPaise <= 0) {
-        return Response.json(
-          { error: 'Order amount must be positive' },
-          { status: 400 }
-        );
-      }
+      const finalAmountPaise = subtotalPaise;
 
       const {
         data: existingCustomer,
@@ -195,9 +257,6 @@ export default {
               customer.lastName.trim(),
             whatsapp_number:
               customer.whatsappNumber,
-
-            // OTP is still mocked in the frontend,
-            // so do not claim real verification yet.
             whatsapp_verified: false,
           })
           .select('id')
@@ -218,8 +277,7 @@ export default {
         .insert({
           customer_id: customerId,
           subtotal_paise: subtotalPaise,
-          bean_credits_used_paise:
-            beanCreditsUsedPaise,
+          bean_credits_used_paise: 0,
           final_amount_paise:
             finalAmountPaise,
           payment_method: paymentMethod,
@@ -271,6 +329,8 @@ export default {
                 beanbookOrder.id,
               beanbook_order_number:
                 orderNumber,
+              beanbook_event_slug:
+                event.slug,
             },
           });
       } catch (error) {
@@ -304,17 +364,12 @@ export default {
       return Response.json({
         beanbookOrderId:
           beanbookOrder.id,
-
         orderNumber,
-
         razorpayOrderId:
           razorpayOrder.id,
-
         amount:
           finalAmountPaise,
-
         currency: 'INR',
-
         keyId,
       });
     } catch (error) {
