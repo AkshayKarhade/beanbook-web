@@ -1,4 +1,4 @@
-export type PaymentMethod = 'table_qr' | 'upi_app';
+export type PaymentMethod = 'razorpay' | 'table_qr' | 'upi_app';
 
 export type OrderStatus =
   | 'awaiting_payment'
