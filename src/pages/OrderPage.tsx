@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { menuItems } from '../data/menu';
+import { useParams } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 
 import type {
   BrewMethod,
   DrinkTemperature,
+  MenuItem,
 } from '../types/menu';
 
 import PhoneInput, {
@@ -20,8 +22,33 @@ import type {
   PaymentMethod,
 } from '../types/order';
 
+const TEMP_UPI_PAYEE_NAME = 'The 8th Coffee Bean';
+const TEMP_UPI_ID = 'akshaykarhade@okicici';
+
 type TemperatureFilter = 'All' | DrinkTemperature;
 type BrewFilter = 'All' | BrewMethod;
+
+type EventMenuResponse = {
+  event: {
+    id: string;
+    name: string;
+    slug: string;
+    date: string;
+    location: string | null;
+  };
+
+  brand: {
+    id: string;
+    name: string;
+  };
+
+  products: {
+    id: string;
+    name: string;
+    price: number | string;
+    description: string | null;
+  }[];
+};
 
 type OrderStep =
   | 'menu'
@@ -34,6 +61,12 @@ const MOCK_BEAN_CREDITS_AVAILABLE = 100;
 const MAX_BEAN_CREDIT_PERCENT = 0.5;
 
 export default function OrderPage() {
+  const { eventSlug } = useParams();
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [menuLoading, setMenuLoading] = useState(true);
+  const [menuError, setMenuError] = useState('');
+  const [eventName, setEventName] = useState('');
+  const [brandName, setBrandName] = useState('');
   const [cart, setCart] = useState<Record<string, number>>({});
 
   const [temperatureFilter, setTemperatureFilter] =
@@ -54,7 +87,6 @@ export default function OrderPage() {
     whatsappNumber: '',
     whatsappVerified: false,
   });
-
   const [customerError, setCustomerError] =
     useState('');
   const [otp, setOtp] = useState('');
@@ -83,20 +115,81 @@ export default function OrderPage() {
   }
 
 useEffect(() => {
-  if (resendSeconds <= 0) {
+  if (!eventSlug) {
+    setMenuLoading(false);
+    setMenuError(
+      'This order link does not contain an event.'
+    );
     return;
   }
 
-  const timer = window.setTimeout(() => {
-    setResendSeconds(
-      (current) => current - 1
-    );
-  }, 1000);
+  const controller = new AbortController();
 
-  return () =>
-    window.clearTimeout(timer);
-}, [resendSeconds]);
+  async function loadMenu() {
+    try {
+      setMenuLoading(true);
+      setMenuError('');
 
+      const response = await fetch(
+        `/api/get-event-menu?event=${encodeURIComponent(
+          eventSlug!
+        )}`,
+        {
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          'Could not load this menu.'
+        );
+      }
+
+      const data =
+        (await response.json()) as EventMenuResponse;
+
+      const loadedMenu: MenuItem[] =
+        data.products.map((product) => ({
+          id: product.id,
+          name: product.name,
+          description:
+            product.description ?? '',
+          price: Number(product.price),
+          available: true,
+        }));
+
+      setMenuItems(loadedMenu);
+      setEventName(data.event.name);
+      setBrandName(data.brand.name);
+    } catch (error) {
+      if (
+        error instanceof DOMException &&
+        error.name === 'AbortError'
+      ) {
+        return;
+      }
+
+      console.error(
+        'Could not load BeanBook menu:',
+        error
+      );
+
+      setMenuError(
+        'We could not load this menu.'
+      );
+    } finally {
+      setMenuLoading(false);
+    }
+  }
+
+  loadMenu();
+
+  return () => {
+    controller.abort();
+  };
+}, [eventSlug]);
+void eventName;
+void brandName;
   function removeItem(itemId: string) {
     setCart((currentCart) => {
       const currentQuantity =
@@ -212,7 +305,15 @@ function verifyOtp() {
 
     return `BB-${number}`;
   }
+  const hasTemperatureData =
+    menuItems.some(
+      (item) => item.temperature !== undefined
+    );
 
+  const hasBrewMethodData =
+    menuItems.some(
+      (item) => item.brewMethod !== undefined
+    );
   const filteredMenuItems =
     menuItems.filter((item) => {
       const matchesTemperature =
@@ -312,7 +413,29 @@ function verifyOtp() {
 
     setStep('status');
   }
+  if (menuLoading) {
+    return (
+      <div className="py-16 text-center">
+        <p className="text-gray-500">
+          Loading menu...
+        </p>
+      </div>
+    );
+  }
 
+  if (menuError) {
+    return (
+      <div className="py-16 text-center">
+        <h1 className="text-xl font-semibold">
+          Menu unavailable
+        </h1>
+
+        <p className="mt-2 text-gray-500">
+          {menuError}
+        </p>
+      </div>
+    );
+  }
   if (step === 'customer') {
     return (
       <CustomerDetails
@@ -348,6 +471,7 @@ function verifyOtp() {
     return (
       <>
         <OrderReview
+          menuItems={menuItems}
           customer={customer}
           cart={cart}
           totalItems={totalItems}
@@ -416,7 +540,7 @@ function verifyOtp() {
           </div>
 
           <div className="space-y-4">
-
+          {hasTemperatureData && (
             <FilterGroup
               label="Temperature"
               options={[
@@ -432,8 +556,8 @@ function verifyOtp() {
                   value as TemperatureFilter
                 )
               }
-            />
-
+            /> )}
+          {hasBrewMethodData && (
             <FilterGroup
               label="Brew method"
               options={[
@@ -448,6 +572,7 @@ function verifyOtp() {
                 )
               }
             />
+          )}
 
           </div>
 
@@ -568,6 +693,7 @@ function verifyOtp() {
         <aside className="hidden h-fit rounded-xl border border-gray-200 p-5 dark:border-gray-800 lg:sticky lg:top-6 lg:block">
 
           <CartSummary
+            menuItems={menuItems}
             cart={cart}
             totalItems={totalItems}
             totalPrice={totalPrice}
@@ -650,6 +776,7 @@ function verifyOtp() {
             <div className="mt-5">
 
               <CartSummary
+                menuItems={menuItems}
                 cart={cart}
                 totalItems={totalItems}
                 totalPrice={totalPrice}
@@ -712,6 +839,7 @@ function FilterGroup({
 }
 
 type CartSummaryProps = {
+   menuItems: MenuItem[];
   cart: Record<string, number>;
   totalItems: number;
   totalPrice: number;
@@ -719,6 +847,7 @@ type CartSummaryProps = {
 };
 
 function CartSummary({
+  menuItems,
   cart,
   totalItems,
   totalPrice,
@@ -850,7 +979,7 @@ function CustomerDetails({
 
         <div>
           <label className="mb-2 block text-sm font-medium">
-            First name
+            First name <span className="text-red-500">*</span>
           </label>
 
           <input
@@ -868,7 +997,7 @@ function CustomerDetails({
 
         <div>
           <label className="mb-2 block text-sm font-medium">
-            Last name
+            Last name <span className="text-red-500">*</span>
           </label>
 
           <input
@@ -886,7 +1015,7 @@ function CustomerDetails({
 
         <div>
           <label className="mb-2 block text-sm font-medium">
-            WhatsApp number
+            WhatsApp number <span className="text-red-500">*</span>
           </label>
           {error && (
               <p className="mt-2 text-sm text-red-600">
@@ -1032,6 +1161,7 @@ function OtpVerification({
 }
 
 type OrderReviewProps = {
+  menuItems: MenuItem[];
   customer: Customer;
   cart: Record<string, number>;
   totalItems: number;
@@ -1050,6 +1180,7 @@ type OrderReviewProps = {
 };
 
 function OrderReview({
+  menuItems,
   customer,
   cart,
   totalItems,
@@ -1308,6 +1439,11 @@ function PaymentModal({
   onClose,
   onConfirm,
 }: PaymentModalProps) {
+  const upiUrl =
+  `upi://pay?pa=${encodeURIComponent(TEMP_UPI_ID)}` +
+  `&pn=${encodeURIComponent(TEMP_UPI_PAYEE_NAME)}` +
+  `&am=${amount.toFixed(2)}` +
+  `&cu=INR`;
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
 
@@ -1421,11 +1557,24 @@ function PaymentModal({
                   your UPI app
                 </p>
 
-                <p className="mt-1 text-sm text-gray-500">
-                  We’ll connect the
-                  actual UPI payment
-                  link later.
-                </p>
+                <div className="mt-4 space-y-4">
+                  <QRCodeSVG
+                    value={upiUrl}
+                    size={180}
+                    className="mx-auto bg-white p-2"
+                  />
+
+                  <a
+                    href={upiUrl}
+                    className="block w-full rounded-xl bg-gray-900 px-4 py-3 text-center font-medium text-white dark:bg-white dark:text-gray-900"
+                  >
+                    Open UPI app
+                  </a>
+
+                  <p className="text-center text-xs text-gray-500">
+                    UPI ID: {TEMP_UPI_ID}
+                  </p>
+                </div>
               </>
             )}
 
@@ -1438,12 +1587,11 @@ function PaymentModal({
           onClick={onConfirm}
           className="mt-6 min-h-14 w-full rounded-xl bg-gray-900 px-4 py-3 text-lg font-medium text-white disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-gray-900"
         >
-          I’ve paid ₹{amount}
+          I've completed the payment
         </button>
 
         <p className="mt-3 text-center text-xs text-gray-500">
-          Payment will still need to
-          be confirmed by BeanBook.
+          We'll verify the payment before confirming your order.
         </p>
 
       </div>
