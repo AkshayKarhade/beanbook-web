@@ -1,12 +1,16 @@
+import Razorpay from 'razorpay';
+import {
+  createHmac,
+  timingSafeEqual,
+} from 'node:crypto';
 
-import Razorpay from "razorpay";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { supabaseAdmin } from '../lib/supabase-server';
 
 export default {
   async fetch(request: Request) {
-    if (request.method !== "POST") {
+    if (request.method !== 'POST') {
       return Response.json(
-        { error: "Method not allowed" },
+        { error: 'Method not allowed' },
         { status: 405 }
       );
     }
@@ -16,7 +20,7 @@ export default {
 
     if (!keyId || !keySecret) {
       return Response.json(
-        { error: "Razorpay credentials are missing" },
+        { error: 'Razorpay credentials are missing' },
         { status: 500 }
       );
     }
@@ -29,22 +33,21 @@ export default {
       const signature = body?.razorpay_signature;
 
       if (
-        typeof orderId !== "string" ||
+        typeof orderId !== 'string' ||
         !/^order_[A-Za-z0-9]+$/.test(orderId) ||
-        typeof paymentId !== "string" ||
+        typeof paymentId !== 'string' ||
         !/^pay_[A-Za-z0-9]+$/.test(paymentId) ||
-        typeof signature !== "string" ||
+        typeof signature !== 'string' ||
         !/^[a-fA-F0-9]{64}$/.test(signature)
       ) {
         return Response.json(
-          { error: "Invalid or missing payment details" },
+          { error: 'Invalid or missing payment details' },
           { status: 400 }
         );
       }
 
-      // Step 1: Verify the payment signature.
       const expectedSignature = createHmac(
-        "sha256",
+        'sha256',
         keySecret
       )
         .update(`${orderId}|${paymentId}`)
@@ -52,81 +55,145 @@ export default {
 
       const receivedSignature = Buffer.from(
         signature,
-        "hex"
+        'hex'
       );
 
       if (
+        receivedSignature.length !==
+          expectedSignature.length ||
         !timingSafeEqual(
           expectedSignature,
           receivedSignature
         )
       ) {
         return Response.json(
-          { error: "Invalid payment signature" },
+          { error: 'Invalid payment signature' },
           { status: 400 }
         );
       }
 
-      // Step 2: Retrieve payment details from Razorpay.
+      const {
+        data: beanbookOrder,
+        error: orderLookupError,
+      } = await supabaseAdmin
+        .from('orders')
+        .select(
+          'id, order_sequence, final_amount_paise, razorpay_order_id, status'
+        )
+        .eq('razorpay_order_id', orderId)
+        .maybeSingle();
+
+      if (orderLookupError) {
+        throw orderLookupError;
+      }
+
+      if (!beanbookOrder) {
+        return Response.json(
+          { error: 'BeanBook order not found' },
+          { status: 404 }
+        );
+      }
+
       const razorpay = new Razorpay({
         key_id: keyId,
         key_secret: keySecret,
       });
 
-      const [razorpayOrder, payment] = await Promise.all([
-        razorpay.orders.fetch(orderId),
-        razorpay.payments.fetch(paymentId),
-      ]);
+      const [razorpayOrder, payment] =
+        await Promise.all([
+          razorpay.orders.fetch(orderId),
+          razorpay.payments.fetch(paymentId),
+        ]);
 
-      // Step 3: Verify our fixed ₹1 test transaction.
-      // TEST ONLY: Replace this with a database-backed
-      // BeanBook order lookup before accepting live payments.
-      const isValidTestPayment =
+      const expectedAmount =
+        Number(beanbookOrder.final_amount_paise);
+
+      const paymentMatchesOrder =
         razorpayOrder.id === orderId &&
-        razorpayOrder.receipt?.startsWith(
-          "beanbook_test_"
-        ) === true &&
-        Number(razorpayOrder.amount) === 100 &&
         payment.order_id === orderId &&
-        Number(payment.amount) === 100 &&
-        payment.currency === "INR";
+        Number(razorpayOrder.amount) ===
+          expectedAmount &&
+        Number(payment.amount) ===
+          expectedAmount &&
+        payment.currency === 'INR';
 
-      if (!isValidTestPayment) {
+      if (!paymentMatchesOrder) {
         return Response.json(
-          { error: "Payment does not match the test order" },
+          {
+            error:
+              'Payment does not match the BeanBook order',
+          },
           { status: 400 }
         );
       }
 
-      // A successful Checkout callback does not necessarily
-      // mean the payment has already been captured.
-      if (payment.status !== "captured") {
+      if (payment.status !== 'captured') {
+        await supabaseAdmin
+          .from('orders')
+          .update({
+            status:
+              'awaiting_bank_confirmation',
+            razorpay_payment_id:
+              payment.id,
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq('id', beanbookOrder.id);
+
         return Response.json(
           {
             verified: false,
             status: payment.status,
-            message: "Payment has not been captured yet",
+            orderId: beanbookOrder.id,
+            orderNumber:
+              `BB-${beanbookOrder.order_sequence}`,
           },
           { status: 202 }
         );
       }
 
+      const { error: updateError } =
+        await supabaseAdmin
+          .from('orders')
+          .update({
+            status: 'paid',
+            razorpay_payment_id:
+              payment.id,
+            paid_at:
+              new Date().toISOString(),
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq('id', beanbookOrder.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
       return Response.json({
         verified: true,
-        testOnly: true,
+        orderId: beanbookOrder.id,
+        orderNumber:
+          `BB-${beanbookOrder.order_sequence}`,
         paymentId: payment.id,
-        amount: payment.amount,
+        amount: Number(payment.amount),
         currency: payment.currency,
         status: payment.status,
       });
     } catch (error) {
       console.error(
-        "Razorpay payment verification failed:",
+        'Razorpay payment verification failed:',
         error
       );
 
       return Response.json(
-        { error: "Could not verify payment" },
+        {
+          error: 'Could not verify payment',
+          details:
+            error instanceof Error
+              ? error.message
+              : 'Unknown error',
+        },
         { status: 500 }
       );
     }
