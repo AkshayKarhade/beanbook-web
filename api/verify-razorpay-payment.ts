@@ -133,8 +133,6 @@ export default {
           .update({
             status:
               'awaiting_bank_confirmation',
-            razorpay_payment_id:
-              payment.id,
             updated_at:
               new Date().toISOString(),
           })
@@ -157,10 +155,6 @@ export default {
           .from('orders')
           .update({
             status: 'paid',
-            razorpay_payment_id:
-              payment.id,
-            paid_at:
-              new Date().toISOString(),
             updated_at:
               new Date().toISOString(),
           })
