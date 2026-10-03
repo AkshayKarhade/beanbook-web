@@ -6,6 +6,25 @@ import {
 
 import { supabaseAdmin } from '../lib/supabase-server';
 
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error
+  ) {
+    return String(
+      (error as { message?: unknown }).message ??
+        'Unknown error'
+    );
+  }
+
+  return 'Unknown error';
+}
+
 export default {
   async fetch(request: Request) {
     if (request.method !== 'POST') {
@@ -78,7 +97,7 @@ export default {
       } = await supabaseAdmin
         .from('orders')
         .select(
-          'id, order_sequence, final_amount_paise, razorpay_order_id, status'
+          'id, order_number, total_amount, razorpay_order_id, payment_status'
         )
         .eq('razorpay_order_id', orderId)
         .maybeSingle();
@@ -106,7 +125,10 @@ export default {
         ]);
 
       const expectedAmount =
-        Number(beanbookOrder.final_amount_paise);
+        Math.round(
+          Number(beanbookOrder.total_amount) *
+            100
+        );
 
       const paymentMatchesOrder =
         razorpayOrder.id === orderId &&
@@ -128,23 +150,13 @@ export default {
       }
 
       if (payment.status !== 'captured') {
-        await supabaseAdmin
-          .from('orders')
-          .update({
-            status:
-              'awaiting_bank_confirmation',
-            updated_at:
-              new Date().toISOString(),
-          })
-          .eq('id', beanbookOrder.id);
-
         return Response.json(
           {
             verified: false,
             status: payment.status,
             orderId: beanbookOrder.id,
             orderNumber:
-              `BB-${beanbookOrder.order_sequence}`,
+              beanbookOrder.order_number,
           },
           { status: 202 }
         );
@@ -154,9 +166,7 @@ export default {
         await supabaseAdmin
           .from('orders')
           .update({
-            status: 'paid',
-            updated_at:
-              new Date().toISOString(),
+            payment_status: 'paid',
           })
           .eq('id', beanbookOrder.id);
 
@@ -168,7 +178,7 @@ export default {
         verified: true,
         orderId: beanbookOrder.id,
         orderNumber:
-          `BB-${beanbookOrder.order_sequence}`,
+          beanbookOrder.order_number,
         paymentId: payment.id,
         amount: Number(payment.amount),
         currency: payment.currency,
@@ -183,10 +193,7 @@ export default {
       return Response.json(
         {
           error: 'Could not verify payment',
-          details:
-            error instanceof Error
-              ? error.message
-              : 'Unknown error',
+          details: getErrorMessage(error),
         },
         { status: 500 }
       );
