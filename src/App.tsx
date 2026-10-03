@@ -3,6 +3,7 @@ import { Link, Route, Routes } from 'react-router-dom';
 import Home from './pages/Home';
 import OrderPage from './pages/OrderPage';
 import AdminPage from './pages/AdminPage';
+import FridgePlaceholderPage from './pages/FridgePlaceholderPage';
 
 function App() {
   return (
@@ -28,6 +29,8 @@ function App() {
           <Route path="/order" element={<OrderPage />} />
           <Route path="/order/:eventSlug" element={<OrderPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/fridge/:fridgeId/order" element={<FridgePlaceholderPage mode="order" />}/>
+          <Route path="/fridge/:fridgeId/explore" element={<FridgePlaceholderPage mode="explore" />}/>
         </Routes>
       </main>
     </div>

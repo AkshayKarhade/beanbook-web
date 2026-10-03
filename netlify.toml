@@ -40,6 +40,17 @@
   force = true
 
 [[redirects]]
+  from = "/api/test-supabase"
+  to = "/.netlify/functions/test-supabase"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/fridge/*"
+  to = "/beanbook/index.html"
+  status = 200
+
+[[redirects]]
   from = "/beanbook/*"
   to = "/beanbook/index.html"
   status = 200
