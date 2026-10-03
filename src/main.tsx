@@ -6,7 +6,12 @@ import App from './App.tsx';
 
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter basename="/beanbook">
+    <BrowserRouter basename={
+    window.location.pathname === '/beanbook' ||
+    window.location.pathname.startsWith('/beanbook/')
+      ? '/beanbook'
+      : '/'
+  }>
       <App />
     </BrowserRouter>
   </React.StrictMode>
