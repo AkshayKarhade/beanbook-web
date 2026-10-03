@@ -1,4 +1,6 @@
 import Razorpay from 'razorpay';
+import { randomUUID } from 'node:crypto';
+
 import { supabaseAdmin } from '../lib/supabase-server';
 
 type RequestItem = {
@@ -11,6 +13,25 @@ type RequestCustomer = {
   lastName: string;
   whatsappNumber: string;
 };
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error
+  ) {
+    return String(
+      (error as { message?: unknown }).message ??
+        'Unknown error'
+    );
+  }
+
+  return 'Unknown error';
+}
 
 export default {
   async fetch(request: Request) {
@@ -189,23 +210,25 @@ export default {
           }
 
           return {
-            menuItemId: product.id,
-            name: product.name,
-            unitPricePaise:
-              Math.round(priceRupees * 100),
+            productId: product.id,
+            unitPriceRupees: priceRupees,
             quantity: requestItem.quantity,
           };
         }
       );
 
-      const subtotalPaise = orderItems.reduce(
+      const totalAmountRupees = orderItems.reduce(
         (total, item) =>
           total +
-          item.unitPricePaise * item.quantity,
+          item.unitPriceRupees * item.quantity,
         0
       );
 
-      const finalAmountPaise = subtotalPaise;
+      const finalAmountPaise =
+        Math.round(totalAmountRupees * 100);
+
+      const customerName =
+        `${customer.firstName.trim()} ${customer.lastName.trim()}`.trim();
 
       const {
         data: existingCustomer,
@@ -213,10 +236,8 @@ export default {
       } = await supabaseAdmin
         .from('customers')
         .select('id')
-        .eq(
-          'whatsapp_number',
-          customer.whatsappNumber
-        )
+        .eq('brand_id', event.brand_id)
+        .eq('phone', customer.whatsappNumber)
         .maybeSingle();
 
       if (customerLookupError) {
@@ -232,12 +253,8 @@ export default {
           await supabaseAdmin
             .from('customers')
             .update({
-              first_name:
-                customer.firstName.trim(),
-              last_name:
-                customer.lastName.trim(),
-              updated_at:
-                new Date().toISOString(),
+              name: customerName,
+              phone: customer.whatsappNumber,
             })
             .eq('id', customerId);
 
@@ -251,13 +268,9 @@ export default {
         } = await supabaseAdmin
           .from('customers')
           .insert({
-            first_name:
-              customer.firstName.trim(),
-            last_name:
-              customer.lastName.trim(),
-            whatsapp_number:
-              customer.whatsappNumber,
-            whatsapp_verified: false,
+            brand_id: event.brand_id,
+            name: customerName,
+            phone: customer.whatsappNumber,
           })
           .select('id')
           .single();
@@ -269,29 +282,29 @@ export default {
         customerId = newCustomer.id;
       }
 
+      const orderNumber =
+        `BB-${randomUUID()
+          .slice(0, 8)
+          .toUpperCase()}`;
+
       const {
         data: beanbookOrder,
         error: orderInsertError,
       } = await supabaseAdmin
         .from('orders')
         .insert({
+          brand_id: event.brand_id,
+          event_id: event.id,
           customer_id: customerId,
-          subtotal_paise: subtotalPaise,
-          bean_credits_used_paise: 0,
-          final_amount_paise:
-            finalAmountPaise,
-          payment_method: paymentMethod,
-          status: 'awaiting_payment',
+          order_number: orderNumber,
+          total_amount: totalAmountRupees,
         })
-        .select('id, order_sequence')
+        .select('id, order_number')
         .single();
 
       if (orderInsertError) {
         throw orderInsertError;
       }
-
-      const orderNumber =
-        `BB-${beanbookOrder.order_sequence}`;
 
       const { error: itemsInsertError } =
         await supabaseAdmin
@@ -299,11 +312,9 @@ export default {
           .insert(
             orderItems.map((item) => ({
               order_id: beanbookOrder.id,
-              menu_item_id: item.menuItemId,
-              name: item.name,
-              unit_price_paise:
-                item.unitPricePaise,
+              product_id: item.productId,
               quantity: item.quantity,
+              unit_price: item.unitPriceRupees,
             }))
           );
 
@@ -337,9 +348,7 @@ export default {
         await supabaseAdmin
           .from('orders')
           .update({
-            status: 'cancelled',
-            updated_at:
-              new Date().toISOString(),
+            payment_status: 'failed',
           })
           .eq('id', beanbookOrder.id);
 
@@ -352,8 +361,6 @@ export default {
           .update({
             razorpay_order_id:
               razorpayOrder.id,
-            updated_at:
-              new Date().toISOString(),
           })
           .eq('id', beanbookOrder.id);
 
@@ -381,10 +388,7 @@ export default {
       return Response.json(
         {
           error: 'Could not create order',
-          details:
-            error instanceof Error
-              ? error.message
-              : 'Unknown error',
+          details: getErrorMessage(error),
         },
         { status: 500 }
       );
