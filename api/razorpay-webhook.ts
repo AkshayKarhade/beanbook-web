@@ -121,7 +121,9 @@ export default {
       error: lookupError,
     } = await supabaseAdmin
       .from('orders')
-      .select('id, final_amount_paise, status')
+      .select(
+        'id, total_amount, payment_status'
+      )
       .eq(
         'razorpay_order_id',
         payment.order_id
@@ -139,24 +141,27 @@ export default {
       );
     }
 
-    if (
-      Number(beanbookOrder.final_amount_paise) !==
-      payment.amount
-    ) {
+    const expectedAmount =
+      Math.round(
+        Number(beanbookOrder.total_amount) *
+          100
+      );
+
+    if (expectedAmount !== payment.amount) {
       return Response.json(
         { error: 'Payment amount mismatch' },
         { status: 400 }
       );
     }
 
-    if (beanbookOrder.status !== 'paid') {
+    if (
+      beanbookOrder.payment_status !== 'paid'
+    ) {
       const { error: updateError } =
         await supabaseAdmin
           .from('orders')
           .update({
-            status: 'paid',
-            updated_at:
-              new Date().toISOString(),
+            payment_status: 'paid',
           })
           .eq('id', beanbookOrder.id);
 
