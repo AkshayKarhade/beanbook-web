@@ -162,20 +162,35 @@ export default {
         );
       }
 
-      const { error: updateError } =
-        await supabaseAdmin
-          .from('orders')
-          .update({
-            payment_status: 'paid',
-          })
-          .eq('id', beanbookOrder.id);
+      const {
+        data: finalizeResult,
+        error: finalizeError,
+      } = await supabaseAdmin.rpc(
+        'finalize_paid_order',
+        {
+          p_order_id: beanbookOrder.id,
+          p_razorpay_payment_id: payment.id,
+        }
+      );
 
-      if (updateError) {
-        throw updateError;
+      if (finalizeError) {
+        throw finalizeError;
       }
+
+      const stockIssue =
+        finalizeResult?.stock_issue === true;
 
       return Response.json({
         verified: true,
+        stockIssue,
+        paymentStatus:
+          finalizeResult?.payment_status ??
+          (stockIssue
+            ? 'paid_stock_issue'
+            : 'paid'),
+        alreadyProcessed:
+          finalizeResult?.already_processed ===
+          true,
         orderId: beanbookOrder.id,
         orderNumber:
           beanbookOrder.order_number,
