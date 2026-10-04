@@ -29,7 +29,8 @@ type EventMenuResponse = {
     id: string;
     name: string;
     slug: string;
-    date: string;
+    startDate: string | null;
+    endDate: string | null;
     location: string | null;
   };
 
@@ -43,6 +44,8 @@ type EventMenuResponse = {
     name: string;
     price: number | string;
     description: string | null;
+    quantity_on_hand: number;
+    available: boolean;
   }[];
 };
 
@@ -104,10 +107,30 @@ export default function OrderPage() {
     useState<Order | null>(null);
 
   function addItem(itemId: string) {
-    setCart((currentCart) => ({
-      ...currentCart,
-      [itemId]: (currentCart[itemId] ?? 0) + 1,
-    }));
+    const item = menuItems.find(
+      (menuItem) => menuItem.id === itemId
+    );
+
+    if (!item || !item.available) {
+      return;
+    }
+
+    const maxQuantity =
+      item.quantityOnHand ?? Number.MAX_SAFE_INTEGER;
+
+    setCart((currentCart) => {
+      const currentQuantity =
+        currentCart[itemId] ?? 0;
+
+      if (currentQuantity >= maxQuantity) {
+        return currentCart;
+      }
+
+      return {
+        ...currentCart,
+        [itemId]: currentQuantity + 1,
+      };
+    });
   }
 
 useEffect(() => {
@@ -151,7 +174,9 @@ useEffect(() => {
           description:
             product.description ?? '',
           price: Number(product.price),
-          available: true,
+          available: product.available,
+          quantityOnHand:
+            product.quantity_on_hand,
         }));
 
       setMenuItems(loadedMenu);
@@ -769,9 +794,15 @@ function verifyOtp() {
                           </div>
                         </div>
 
-                        <span className="shrink-0 font-semibold">
-                          ₹{item.price}
-                        </span>
+                        <div className="shrink-0 text-right">
+                          <span className="font-semibold">
+                            ₹{item.price}
+                          </span>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {item.quantityOnHand ?? 0}{' '}
+                            in stock
+                          </p>
+                        </div>
 
                       </div>
 
@@ -780,14 +811,17 @@ function verifyOtp() {
                         {quantity === 0 ? (
                           <button
                             type="button"
+                            disabled={!item.available}
                             onClick={() =>
                               addItem(
                                 item.id
                               )
                             }
-                            className="min-h-12 w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white dark:bg-white dark:text-gray-900"
+                            className="min-h-12 w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white disabled:cursor-not-allowed disabled:opacity-40 dark:bg-white dark:text-gray-900"
                           >
-                            Add
+                            {item.available
+                              ? 'Add'
+                              : 'Sold out'}
                           </button>
                         ) : (
                           <div className="flex items-center justify-between">
@@ -810,12 +844,17 @@ function verifyOtp() {
 
                             <button
                               type="button"
+                              disabled={
+                                quantity >=
+                                (item.quantityOnHand ??
+                                  Number.MAX_SAFE_INTEGER)
+                              }
                               onClick={() =>
                                 addItem(
                                   item.id
                                 )
                               }
-                              className="flex h-12 w-12 items-center justify-center rounded-lg border border-gray-300 text-2xl dark:border-gray-700"
+                              className="flex h-12 w-12 items-center justify-center rounded-lg border border-gray-300 text-2xl disabled:cursor-not-allowed disabled:opacity-40 dark:border-gray-700"
                             >
                               +
                             </button>
