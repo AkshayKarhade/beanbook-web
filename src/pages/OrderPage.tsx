@@ -528,7 +528,10 @@ function verifyOtp() {
                   currentOrder
                     ? {
                         ...currentOrder,
-                        status: 'paid',
+                        status:
+                          verified.stockIssue === true
+                            ? 'paid_stock_issue'
+                            : 'paid',
                       }
                     : currentOrder
                 );
@@ -1835,6 +1838,12 @@ function OrderStatusDisplay({
       title: 'Payment confirmed',
       description:
         'Everything looks good.',
+    },
+
+    paid_stock_issue: {
+      title: 'Payment received — please speak to staff',
+      description:
+        'Your payment is confirmed, but the fridge stock changed before your order could be finalized. Please show this screen to the location staff.',
     },
 
     preparing: {
