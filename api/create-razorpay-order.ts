@@ -157,20 +157,33 @@ export default {
       const itemIds = Array.from(seenItemIds);
 
       const {
-        data: products,
-        error: productsError,
+        data: eventProducts,
+        error: eventProductsError,
       } = await supabaseAdmin
-        .from('products')
-        .select('id, name, price, is_active')
-        .eq('brand_id', event.brand_id)
-        .eq('is_active', true)
-        .in('id', itemIds);
+        .from('event_products')
+        .select(`
+          product_id,
+          is_available,
+          price_override,
+          products (
+            id,
+            name,
+            price,
+            is_active
+          )
+        `)
+        .eq('event_id', event.id)
+        .eq('is_available', true)
+        .in('product_id', itemIds);
 
-      if (productsError) {
-        throw productsError;
+      if (eventProductsError) {
+        throw eventProductsError;
       }
 
-      if (!products || products.length !== itemIds.length) {
+      if (
+        !eventProducts ||
+        eventProducts.length !== itemIds.length
+      ) {
         return Response.json(
           {
             error:
@@ -180,25 +193,65 @@ export default {
         );
       }
 
-      const productsById = new Map(
-        products.map((product) => [
-          product.id,
-          product,
+      const {
+        data: inventory,
+        error: inventoryError,
+      } = await supabaseAdmin
+        .from('event_inventory')
+        .select('product_id, quantity_on_hand')
+        .eq('event_id', event.id)
+        .in('product_id', itemIds);
+
+      if (inventoryError) {
+        throw inventoryError;
+      }
+
+      const inventoryByProduct = new Map(
+        (inventory ?? []).map((row) => [
+          row.product_id,
+          row.quantity_on_hand,
+        ])
+      );
+
+      const eventProductsById = new Map(
+        eventProducts.map((row) => [
+          row.product_id,
+          row,
         ])
       );
 
       const orderItems = requestItems.map(
         (requestItem) => {
-          const product =
-            productsById.get(requestItem.menuItemId);
+          const eventProduct =
+            eventProductsById.get(
+              requestItem.menuItemId
+            );
 
-          if (!product) {
+          const product = Array.isArray(
+            eventProduct?.products
+          )
+            ? eventProduct?.products[0]
+            : eventProduct?.products;
+
+          if (!eventProduct || !product || !product.is_active) {
             throw new Error(
               'Product validation failed'
             );
           }
 
-          const priceRupees = Number(product.price);
+          const quantityOnHand =
+            inventoryByProduct.get(product.id) ?? 0;
+
+          if (requestItem.quantity > quantityOnHand) {
+            throw new Error(
+              `Insufficient stock for product: ${product.id}`
+            );
+          }
+
+          const priceRupees = Number(
+            eventProduct.price_override ??
+              product.price
+          );
 
           if (
             !Number.isFinite(priceRupees) ||
