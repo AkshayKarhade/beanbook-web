@@ -5,6 +5,7 @@ export type OrderStatus =
   | 'awaiting_payment_confirmation'
   | 'awaiting_bank_confirmation'
   | 'paid'
+  | 'paid_stock_issue'
   | 'preparing'
   | 'ready'
   | 'completed'
