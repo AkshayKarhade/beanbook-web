@@ -7,6 +7,7 @@ export type MenuItem = {
   description: string;
   price: number;
   available: boolean;
+  quantityOnHand?: number;
 
   // Optional presentation metadata.
   // Not every BeanBook product needs these.
