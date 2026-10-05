@@ -302,22 +302,63 @@ function resendOtp() {
   // Real WhatsApp OTP sending will go here later.
 }
 
-function verifyOtp() {
-  if (otp === '123456') {
+async function verifyOtp() {
+  if (!eventSlug) {
+    setOtpError(
+      'This order link is missing its event.'
+    );
+    return;
+  }
+
+  try {
+    setOtpError('');
+
+    const response = await fetch(
+      '/api/verify-customer',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          eventSlug,
+          otp,
+          customer: {
+            firstName:
+              customer.firstName,
+            lastName:
+              customer.lastName,
+            whatsappNumber:
+              customer.whatsappNumber,
+          },
+        }),
+      }
+    );
+
+    const result =
+      await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        result.error ||
+          result.details ||
+          'Could not verify this number.'
+      );
+    }
+
     setCustomer((currentCustomer) => ({
       ...currentCustomer,
       whatsappVerified: true,
     }));
 
-    setOtpError('');
     setStep('review');
-
-    return;
+  } catch (error) {
+    setOtpError(
+      error instanceof Error
+        ? error.message
+        : 'Could not verify this number.'
+    );
   }
-
-  setOtpError(
-    'That code is incorrect. Try 123456 for now.'
-  );
 }
 
   const hasTemperatureData =
