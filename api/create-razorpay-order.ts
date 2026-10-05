@@ -329,7 +329,7 @@ export default {
               first_name: customer.firstName.trim(),
               last_name: customer.lastName.trim(),
               phone: customer.whatsappNumber,
-              whatsapp_verification_status: 'not_verified',
+              whatsapp_verification_status: 'unverified',
               whatsapp_verified_at: null,
               updated_at: new Date().toISOString(),
             })
@@ -348,7 +348,7 @@ export default {
               first_name: customer.firstName.trim(),
               last_name: customer.lastName.trim(),
               phone: customer.whatsappNumber,
-              whatsapp_verification_status: 'not_verified',
+              whatsapp_verification_status: 'unverified',
               whatsapp_verified_at: null,
               updated_at: new Date().toISOString(),
             })
