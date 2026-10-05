@@ -129,6 +129,27 @@ export default {
         );
       }
 
+      const {
+        data: inventoryUnit,
+        error: inventoryUnitError,
+      } = await supabaseAdmin
+        .from('inventory_units')
+        .select('id')
+        .eq('legacy_event_id', event.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (inventoryUnitError) {
+        throw inventoryUnitError;
+      }
+
+      if (!inventoryUnit) {
+        return Response.json(
+          { error: 'Inventory unit is not configured for this fridge' },
+          { status: 409 }
+        );
+      }
+
       const seenItemIds = new Set<string>();
 
       for (const requestItem of requestItems) {
@@ -197,9 +218,9 @@ export default {
         data: inventory,
         error: inventoryError,
       } = await supabaseAdmin
-        .from('event_inventory')
+        .from('inventory_balances')
         .select('product_id, quantity_on_hand')
-        .eq('event_id', event.id)
+        .eq('inventory_unit_id', inventoryUnit.id)
         .in('product_id', itemIds);
 
       if (inventoryError) {
@@ -348,6 +369,7 @@ export default {
         .insert({
           brand_id: event.brand_id,
           event_id: event.id,
+          inventory_unit_id: inventoryUnit.id,
           customer_id: customerId,
           order_number: orderNumber,
           total_amount: totalAmountRupees,
