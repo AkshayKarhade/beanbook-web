@@ -1,0 +1,259 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0" />
+
+  <title>BeanBook - Razorpay Test</title>
+
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 440px;
+      margin: auto;
+      padding: 30px;
+      background: white;
+      border-radius: 12px;
+    }
+
+    button {
+      width: 100%;
+      padding: 15px;
+      margin-top: 20px;
+      background: #222;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 20px;
+      line-height: 1.6;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+    <h2>BeanBook Payment Test</h2>
+
+    <p>Amount: ₹1.00</p>
+    <p>Environment: Razorpay Test Mode</p>
+
+    <button id="payButton" onclick="startPayment()">
+      Pay ₹1 using Razorpay
+    </button>
+
+    <div id="status" role="status" aria-live="polite">
+      Ready to begin test payment.
+    </div>
+  </div>
+
+  <script>
+    const payButton = document.getElementById("payButton");
+    const statusElement = document.getElementById("status");
+
+    function showStatus(message) {
+      statusElement.textContent = message;
+    }
+
+    async function verifyPayment(details) {
+      const response = await fetch(
+        "/api/verify-razorpay-payment",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(details)
+        }
+      );
+
+      const result = await response.json();
+
+      if (response.ok && result.verified === true) {
+        showStatus(
+          "PAYMENT VERIFIED SUCCESSFULLY!\n" +
+          "Payment ID: " + result.paymentId + "\n" +
+          "Amount: ₹" + (result.amount / 100) + "\n" +
+          "Status: " + result.status
+        );
+
+        statusElement.style.whiteSpace = "pre-line";
+        return;
+      }
+
+      if (response.status === 202) {
+        showStatus(
+          "Payment received. Waiting for Razorpay " +
+          "to confirm that it has been captured."
+        );
+
+        // Allow time for Razorpay to capture the payment.
+        for (let attempt = 0; attempt < 10; attempt++) {
+          await new Promise(resolve =>
+            setTimeout(resolve, 2000)
+          );
+
+          const retryResponse = await fetch(
+            "/api/verify-razorpay-payment",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify(details)
+            }
+          );
+
+          const retryResult = await retryResponse.json();
+
+          if (
+            retryResponse.ok &&
+            retryResult.verified === true
+          ) {
+            showStatus(
+              "PAYMENT VERIFIED SUCCESSFULLY!\n" +
+              "Payment ID: " + retryResult.paymentId + "\n" +
+              "Status: " + retryResult.status
+            );
+
+            statusElement.style.whiteSpace = "pre-line";
+            return;
+          }
+
+          if (retryResponse.status !== 202) {
+            throw new Error(
+              retryResult.error ||
+              "Payment verification failed."
+            );
+          }
+        }
+
+        showStatus(
+          "Payment has not been confirmed as captured yet. " +
+          "Check its status in the Razorpay Dashboard."
+        );
+
+        return;
+      }
+
+      throw new Error(
+        result.error || "Payment verification failed."
+      );
+    }
+
+    async function startPayment() {
+      payButton.disabled = true;
+
+      showStatus("Creating Razorpay test order...");
+
+      try {
+        const response = await fetch(
+          "/api/create-razorpay-order",
+          { method: "POST" }
+        );
+
+        const order = await response.json();
+
+        if (!response.ok) {
+          throw new Error(
+            order.error || "Could not create payment order."
+          );
+        }
+
+        if (
+          !order.keyId?.startsWith("rzp_test_") ||
+          order.amount !== 100 ||
+          order.currency !== "INR"
+        ) {
+          throw new Error(
+            "Unexpected payment configuration. Test cancelled."
+          );
+        }
+
+        if (typeof window.Razorpay !== "function") {
+          throw new Error(
+            "Razorpay Checkout could not be loaded."
+          );
+        }
+
+        showStatus("Opening Razorpay Checkout...");
+
+        const options = {
+          key: order.keyId,
+          amount: order.amount,
+          currency: order.currency,
+          name: "BeanBook",
+          description: "₹1 Test Payment",
+          order_id: order.orderId,
+
+          handler: async function (paymentResponse) {
+            showStatus("Verifying payment with Razorpay...");
+
+            try {
+              if (
+                paymentResponse.razorpay_order_id !==
+                order.orderId
+              ) {
+                throw new Error(
+                  "Payment order ID does not match."
+                );
+              }
+
+              await verifyPayment(paymentResponse);
+            } catch (error) {
+              showStatus(
+                "Verification error: " + error.message
+              );
+            } finally {
+              payButton.disabled = false;
+            }
+          },
+
+          modal: {
+            ondismiss: function () {
+              showStatus(
+                "Checkout closed. No payment has been " +
+                "confirmed by BeanBook."
+              );
+
+              payButton.disabled = false;
+            }
+          },
+
+          theme: {
+            color: "#222222"
+          }
+        };
+
+        const checkout = new Razorpay(options);
+        checkout.open();
+
+      } catch (error) {
+        showStatus("Error: " + error.message);
+        payButton.disabled = false;
+      }
+    }
+  </script>
+
+</body>
+</html>

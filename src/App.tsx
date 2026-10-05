@@ -14,9 +14,6 @@ function App() {
           </Link>
 
           <div className="flex items-center gap-4 text-sm">
-            <Link to="/order" className="hover:underline">
-              Order
-            </Link>
 
             <Link to="/admin" className="hover:underline">
               Admin
@@ -29,6 +26,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/order" element={<OrderPage />} />
+          <Route path="/order/:eventSlug" element={<OrderPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>
       </main>

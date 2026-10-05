@@ -6,8 +6,12 @@ export type MenuItem = {
   name: string;
   description: string;
   price: number;
-  category: string;
-  temperature: DrinkTemperature;
-  brewMethod: BrewMethod;
   available: boolean;
+  quantityOnHand?: number;
+
+  // Optional presentation metadata.
+  // Not every BeanBook product needs these.
+  category?: string;
+  temperature?: DrinkTemperature;
+  brewMethod?: BrewMethod;
 };
