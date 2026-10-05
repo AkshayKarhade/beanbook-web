@@ -1089,9 +1089,7 @@ function CustomerDetails({
       </h1>
 
       <p className="mt-2 text-gray-600 dark:text-gray-400">
-        We’ll verify your WhatsApp
-        number before you place the
-        order.
+        Enter your details to continue to checkout.
       </p>
 
       <div className="mt-8 space-y-5">
@@ -1134,7 +1132,7 @@ function CustomerDetails({
 
         <div>
           <label className="mb-2 block text-sm font-medium">
-            mobile number <span className="text-red-500">*</span>
+            Mobile number <span className="text-red-500">*</span>
           </label>
           {error && (
               <p className="mt-2 text-sm text-red-600">
@@ -1170,18 +1168,6 @@ function CustomerDetails({
     </div>
   );
 }
-
-type OtpVerificationProps = {
-  whatsappNumber: string;
-  otp: string;
-  error: string;
-  resendSeconds: number;
-
-  onOtpChange: (value: string) => void;
-  onVerify: () => void;
-  onBack: () => void;
-  onResend: () => void;
-};
 
 function OrderReview({
   menuItems,
