@@ -39,9 +39,7 @@ export default {
         .eq('status', 'active')
         .maybeSingle();
 
-      if (eventError) {
-        throw eventError;
-      }
+      if (eventError) throw eventError;
 
       if (!event) {
         return Response.json(
@@ -73,8 +71,27 @@ export default {
         .eq('id', event.brand_id)
         .single();
 
-      if (brandError) {
-        throw brandError;
+      if (brandError) throw brandError;
+
+      const {
+        data: inventoryUnit,
+        error: inventoryUnitError,
+      } = await supabaseAdmin
+        .from('inventory_units')
+        .select('id')
+        .eq('legacy_event_id', event.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (inventoryUnitError) {
+        throw inventoryUnitError;
+      }
+
+      if (!inventoryUnit) {
+        return Response.json(
+          { error: 'Inventory unit is not configured for this fridge' },
+          { status: 409 }
+        );
       }
 
       const {
@@ -107,9 +124,9 @@ export default {
         data: inventory,
         error: inventoryError,
       } = await supabaseAdmin
-        .from('event_inventory')
+        .from('inventory_balances')
         .select('product_id, quantity_on_hand')
-        .eq('event_id', event.id);
+        .eq('inventory_unit_id', inventoryUnit.id);
 
       if (inventoryError) {
         throw inventoryError;
@@ -159,12 +176,10 @@ export default {
           endDate: event.event_end_date,
           location: event.location,
         },
-
         brand: {
           id: brand.id,
           name: brand.name,
         },
-
         products,
       });
     } catch (error) {
@@ -174,9 +189,7 @@ export default {
       );
 
       return Response.json(
-        {
-          error: 'Could not load event menu',
-        },
+        { error: 'Could not load event menu' },
         { status: 500 }
       );
     }
