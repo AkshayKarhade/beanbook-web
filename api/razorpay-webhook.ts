@@ -155,24 +155,40 @@ export default {
     }
 
     if (
-      beanbookOrder.payment_status !== 'paid'
+      typeof payment.id !== 'string' ||
+      !payment.id.trim()
     ) {
-      const { error: updateError } =
-        await supabaseAdmin
-          .from('orders')
-          .update({
-            payment_status: 'paid',
-          })
-          .eq('id', beanbookOrder.id);
+      return Response.json(
+        { error: 'Payment ID is missing' },
+        { status: 400 }
+      );
+    }
 
-      if (updateError) {
-        throw updateError;
+    const {
+      data: finalizeResult,
+      error: finalizeError,
+    } = await supabaseAdmin.rpc(
+      'finalize_paid_order',
+      {
+        p_order_id: beanbookOrder.id,
+        p_razorpay_payment_id: payment.id,
       }
+    );
+
+    if (finalizeError) {
+      throw finalizeError;
     }
 
     return Response.json({
       received: true,
       handled: true,
+      stockIssue:
+        finalizeResult?.stock_issue === true,
+      alreadyProcessed:
+        finalizeResult?.already_processed === true,
+      paymentStatus:
+        finalizeResult?.payment_status ??
+        'paid',
     });
   },
 };
