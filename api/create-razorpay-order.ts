@@ -309,9 +309,7 @@ export default {
         error: customerLookupError,
       } = await supabaseAdmin
         .from('customers')
-        .select(
-          'id, whatsapp_verification_status'
-        )
+        .select('id')
         .eq('brand_id', event.brand_id)
         .eq('phone', customer.whatsappNumber)
         .maybeSingle();
@@ -320,40 +318,48 @@ export default {
         throw customerLookupError;
       }
 
-      if (
-        !existingCustomer ||
-        existingCustomer.whatsapp_verification_status !==
-          'verified'
-      ) {
-        return Response.json(
-          {
-            error:
-              'Please verify your WhatsApp number before payment',
-          },
-          { status: 409 }
-        );
-      }
+      let customerId = existingCustomer?.id;
 
-      const customerId = existingCustomer.id;
+      if (customerId) {
+        const { error: customerUpdateError } =
+          await supabaseAdmin
+            .from('customers')
+            .update({
+              name: customerName,
+              first_name: customer.firstName.trim(),
+              last_name: customer.lastName.trim(),
+              phone: customer.whatsappNumber,
+              whatsapp_verification_status: 'not_verified',
+              whatsapp_verified_at: null,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', customerId);
 
-      const { error: customerUpdateError } =
-        await supabaseAdmin
-          .from('customers')
-          .update({
-            name: customerName,
-            first_name:
-              customer.firstName.trim(),
-            last_name:
-              customer.lastName.trim(),
-            phone:
-              customer.whatsappNumber,
-            updated_at:
-              new Date().toISOString(),
-          })
-          .eq('id', customerId);
+        if (customerUpdateError) {
+          throw customerUpdateError;
+        }
+      } else {
+        const { data: newCustomer, error: customerInsertError } =
+          await supabaseAdmin
+            .from('customers')
+            .insert({
+              brand_id: event.brand_id,
+              name: customerName,
+              first_name: customer.firstName.trim(),
+              last_name: customer.lastName.trim(),
+              phone: customer.whatsappNumber,
+              whatsapp_verification_status: 'not_verified',
+              whatsapp_verified_at: null,
+              updated_at: new Date().toISOString(),
+            })
+            .select('id')
+            .single();
 
-      if (customerUpdateError) {
-        throw customerUpdateError;
+        if (customerInsertError) {
+          throw customerInsertError;
+        }
+
+        customerId = newCustomer.id;
       }
 
       const orderNumber =
