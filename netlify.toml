@@ -10,6 +10,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/verify-customer"
+  to = "/.netlify/functions/verify-customer"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/verify-razorpay-payment"
   to = "/.netlify/functions/verify-razorpay-payment"
   status = 200
