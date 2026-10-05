@@ -1169,6 +1169,22 @@ function CustomerDetails({
   );
 }
 
+type OrderReviewProps = {
+  menuItems: MenuItem[];
+  customer: Customer;
+  cart: Record<string, number>;
+  totalItems: number;
+  totalPrice: number;
+  beanCreditsAvailable: number;
+  maxCreditsAllowed: number;
+  beanCreditsToUse: string;
+  beanCreditsUsed: number;
+  finalAmount: number;
+  onBeanCreditsChange: (value: string) => void;
+  onBack: () => void;
+  onPayNow: () => void;
+};
+
 function OrderReview({
   menuItems,
   customer,
