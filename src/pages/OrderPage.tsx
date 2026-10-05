@@ -14,7 +14,6 @@ import PhoneInput, {
 import 'react-phone-number-input/style.css';
 
 import type { Customer } from '../types/customer';
-
 import type {
   Order,
   OrderStatus,
@@ -52,7 +51,6 @@ type EventMenuResponse = {
 type OrderStep =
   | 'menu'
   | 'customer'
-  | 'verify'
   | 'review'
   | 'status';
 
@@ -88,11 +86,6 @@ export default function OrderPage() {
   });
   const [customerError, setCustomerError] =
     useState('');
-  const [otp, setOtp] = useState('');
-  const [otpError, setOtpError] = useState('');
-
-  const [resendSeconds, setResendSeconds] =
-  useState(30);
 
   const [beanCreditsToUse, setBeanCreditsToUse] =
   useState('');
@@ -256,109 +249,27 @@ void brandName;
     setStep('customer');
   }
 
-function sendOtp() {
+function continueToReview() {
   if (!customer.firstName.trim()) {
-    setCustomerError(
-      'Please enter your first name.'
-    );
+    setCustomerError('Please enter your first name.');
     return;
   }
 
   if (!customer.lastName.trim()) {
-    setCustomerError(
-      'Please enter your last name.'
-    );
+    setCustomerError('Please enter your last name.');
     return;
   }
 
   if (
     !customer.whatsappNumber ||
-    !isValidPhoneNumber(
-      customer.whatsappNumber
-    )
+    !isValidPhoneNumber(customer.whatsappNumber)
   ) {
-    setCustomerError(
-      'Please enter a valid WhatsApp number.'
-    );
+    setCustomerError('Please enter a valid mobile number.');
     return;
   }
 
   setCustomerError('');
-  setOtp('');
-  setOtpError('');
-  setResendSeconds(30);
-  setStep('verify');
-}
-
-function resendOtp() {
-  if (resendSeconds > 0) {
-    return;
-  }
-
-  setOtp('');
-  setOtpError('');
-  setResendSeconds(30);
-
-  // Real WhatsApp OTP sending will go here later.
-}
-
-async function verifyOtp() {
-  if (!eventSlug) {
-    setOtpError(
-      'This order link is missing its event.'
-    );
-    return;
-  }
-
-  try {
-    setOtpError('');
-
-    const response = await fetch(
-      '/api/verify-customer',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          eventSlug,
-          otp,
-          customer: {
-            firstName:
-              customer.firstName,
-            lastName:
-              customer.lastName,
-            whatsappNumber:
-              customer.whatsappNumber,
-          },
-        }),
-      }
-    );
-
-    const result =
-      await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        result.error ||
-          result.details ||
-          'Could not verify this number.'
-      );
-    }
-
-    setCustomer((currentCustomer) => ({
-      ...currentCustomer,
-      whatsappVerified: true,
-    }));
-
-    setStep('review');
-  } catch (error) {
-    setOtpError(
-      error instanceof Error
-        ? error.message
-        : 'Could not verify this number.'
-    );
-  }
+  setStep('review');
 }
 
   const hasTemperatureData =
@@ -655,26 +566,7 @@ async function verifyOtp() {
         error={customerError}
         onChange={updateCustomer}
         onBack={() => setStep('menu')}
-        onSendOtp={sendOtp}
-      />
-    );
-  }
-
-  if (step === 'verify') {
-    return (
-      <OtpVerification
-        whatsappNumber={
-          customer.whatsappNumber
-        }
-        otp={otp}
-        error={otpError}
-        resendSeconds={resendSeconds}
-        onOtpChange={setOtp}
-        onVerify={verifyOtp}
-        onBack={() =>
-          setStep('customer')
-        }
-        onResend={resendOtp}
+        onContinue={continueToReview}
       />
     );
   }
@@ -1166,7 +1058,7 @@ type CustomerDetailsProps = {
   ) => void;
 
   onBack: () => void;
-  onSendOtp: () => void;
+  onContinue: () => void;
 };
 
 function CustomerDetails({
@@ -1174,7 +1066,7 @@ function CustomerDetails({
   error,
   onChange,
   onBack,
-  onSendOtp,
+  onContinue,
 }: CustomerDetailsProps) {
   const canContinue =
     customer.firstName.trim().length > 0 &&
@@ -1242,7 +1134,7 @@ function CustomerDetails({
 
         <div>
           <label className="mb-2 block text-sm font-medium">
-            WhatsApp number <span className="text-red-500">*</span>
+            mobile number <span className="text-red-500">*</span>
           </label>
           {error && (
               <p className="mt-2 text-sm text-red-600">
@@ -1260,7 +1152,7 @@ function CustomerDetails({
                   value ?? ''
                 )
               }
-              placeholder="Enter WhatsApp number"
+              placeholder="Enter mobile number"
             />
           </div>
         </div>
@@ -1268,10 +1160,10 @@ function CustomerDetails({
         <button
           type="button"
           disabled={!canContinue}
-          onClick={onSendOtp}
+          onClick={onContinue}
           className="min-h-12 w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white disabled:opacity-40 dark:bg-white dark:text-gray-900"
         >
-          Send verification code
+          Continue
         </button>
 
       </div>
@@ -1289,121 +1181,6 @@ type OtpVerificationProps = {
   onVerify: () => void;
   onBack: () => void;
   onResend: () => void;
-};
-
-function OtpVerification({
-  whatsappNumber,
-  otp,
-  error,
-  resendSeconds,
-  onOtpChange,
-  onVerify,
-  onBack,
-  onResend,
-}: OtpVerificationProps) {
-    const visibleDigits =
-    whatsappNumber.slice(-4);
-
-  const maskedNumber =
-    `••••••${visibleDigits}`;
-  return (
-    <div className="mx-auto max-w-xl">
-
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-6 text-sm text-gray-600 hover:underline dark:text-gray-400"
-      >
-        ← Change details
-      </button>
-
-      <h1 className="text-2xl font-semibold">
-        Verify your WhatsApp
-      </h1>
-
-      <p className="mt-2 text-gray-600 dark:text-gray-400">
-        We sent a 6-digit code to{' '}
-        <strong>
-          {maskedNumber}
-        </strong>
-      </p>
-
-      <div className="mt-8">
-
-        <input
-          type="text"
-          inputMode="numeric"
-          maxLength={6}
-          value={otp}
-          onChange={(event) =>
-            onOtpChange(
-              event.target.value.replace(
-                /\D/g,
-                ''
-              )
-            )
-          }
-          className="min-h-14 w-full rounded-lg border border-gray-300 bg-white px-4 text-center text-2xl tracking-[0.5em] dark:border-gray-700 dark:bg-gray-950"
-          placeholder="000000"
-        />
-
-        {error && (
-          <p className="mt-3 text-sm text-red-600">
-            {error}
-          </p>
-        )}
-
-        <p className="mt-3 text-sm text-gray-500">
-          Development code:{' '}
-          <strong>123456</strong>
-        </p>
-
-        <button
-          type="button"
-          onClick={onVerify}
-          disabled={otp.length !== 6}
-          className="mt-5 min-h-12 w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white disabled:opacity-40 dark:bg-white dark:text-gray-900"
-        >
-          Verify number
-        </button>
-
-        <button
-          type="button"
-          onClick={onResend}
-          disabled={resendSeconds > 0}
-          className={`mt-4 w-full rounded-lg px-4 py-3 text-sm font-medium transition ${
-            resendSeconds > 0
-            ? 'cursor-not-allowed bg-gray-100 text-gray-400 dark:bg-gray-900 dark:text-gray-600'
-            : 'bg-gray-900 text-white hover:bg-gray-800 dark:bg-white dark:text-gray-900 dark:hover:bg-gray-200'
-          }`}
-        >
-          {resendSeconds > 0
-            ? `Resend code in ${resendSeconds}s`
-            : 'Resend code'}
-        </button>
-
-      </div>
-    </div>
-  );
-}
-
-type OrderReviewProps = {
-  menuItems: MenuItem[];
-  customer: Customer;
-  cart: Record<string, number>;
-  totalItems: number;
-  totalPrice: number;
-
-  beanCreditsAvailable: number;
-  maxCreditsAllowed: number;
-  beanCreditsToUse: string;
-  beanCreditsUsed: number;
-  finalAmount: number;
-  onBeanCreditsChange: (
-    value: string
-  ) => void;
-  onBack: () => void;
-  onPayNow: () => void;
 };
 
 function OrderReview({
