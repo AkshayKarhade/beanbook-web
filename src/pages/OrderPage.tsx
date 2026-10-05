@@ -14,6 +14,7 @@ import PhoneInput, {
 import 'react-phone-number-input/style.css';
 
 import type { Customer } from '../types/customer';
+import { supabase } from '../lib/supabase';
 
 import type {
   Order,
@@ -256,7 +257,7 @@ void brandName;
     setStep('customer');
   }
 
-function sendOtp() {
+async function sendOtp() {
   if (!customer.firstName.trim()) {
     setCustomerError(
       'Please enter your first name.'
@@ -283,23 +284,66 @@ function sendOtp() {
     return;
   }
 
-  setCustomerError('');
-  setOtp('');
-  setOtpError('');
-  setResendSeconds(30);
-  setStep('verify');
+  try {
+    setCustomerError('');
+
+    const { error } =
+      await supabase.auth.signInWithOtp({
+        phone: customer.whatsappNumber,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    setOtp('');
+    setOtpError('');
+    setResendSeconds(30);
+    setStep('verify');
+  } catch (error) {
+    setCustomerError(
+      error instanceof Error
+        ? error.message
+        : 'Could not send the WhatsApp OTP.'
+    );
+  }
 }
 
-function resendOtp() {
-  if (resendSeconds > 0) {
+async function resendOtp() {
+  if (
+    resendSeconds > 0 ||
+    !customer.whatsappNumber
+  ) {
     return;
   }
 
-  setOtp('');
-  setOtpError('');
-  setResendSeconds(30);
+  try {
+    setOtpError('');
 
-  // Real WhatsApp OTP sending will go here later.
+    const { error } =
+      await supabase.auth.signInWithOtp({
+        phone: customer.whatsappNumber,
+        options: {
+          shouldCreateUser: true,
+        },
+      });
+
+    if (error) {
+      throw error;
+    }
+
+    setOtp('');
+    setResendSeconds(30);
+  } catch (error) {
+    setOtpError(
+      error instanceof Error
+        ? error.message
+        : 'Could not resend the WhatsApp OTP.'
+    );
+  }
 }
 
 async function verifyOtp() {
@@ -313,6 +357,27 @@ async function verifyOtp() {
   try {
     setOtpError('');
 
+    const {
+      data: authData,
+      error: authError,
+    } = await supabase.auth.verifyOtp({
+      phone: customer.whatsappNumber,
+      token: otp,
+      type: 'sms',
+    });
+
+    if (
+      authError ||
+      !authData.session?.access_token
+    ) {
+      throw (
+        authError ??
+        new Error(
+          'Could not verify this WhatsApp number.'
+        )
+      );
+    }
+
     const response = await fetch(
       '/api/verify-customer',
       {
@@ -322,7 +387,8 @@ async function verifyOtp() {
         },
         body: JSON.stringify({
           eventSlug,
-          otp,
+          accessToken:
+            authData.session.access_token,
           customer: {
             firstName:
               customer.firstName,
@@ -342,9 +408,11 @@ async function verifyOtp() {
       throw new Error(
         result.error ||
           result.details ||
-          'Could not verify this number.'
+          'Could not save this verified customer.'
       );
     }
+
+    await supabase.auth.signOut();
 
     setCustomer((currentCustomer) => ({
       ...currentCustomer,
@@ -356,7 +424,7 @@ async function verifyOtp() {
     setOtpError(
       error instanceof Error
         ? error.message
-        : 'Could not verify this number.'
+        : 'Could not verify this WhatsApp number.'
     );
   }
 }
@@ -1352,11 +1420,6 @@ function OtpVerification({
             {error}
           </p>
         )}
-
-        <p className="mt-3 text-sm text-gray-500">
-          Development code:{' '}
-          <strong>123456</strong>
-        </p>
 
         <button
           type="button"
