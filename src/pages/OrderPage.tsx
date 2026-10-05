@@ -14,8 +14,6 @@ import PhoneInput, {
 import 'react-phone-number-input/style.css';
 
 import type { Customer } from '../types/customer';
-import { supabase } from '../lib/supabase';
-
 import type {
   Order,
   OrderStatus,
@@ -53,7 +51,6 @@ type EventMenuResponse = {
 type OrderStep =
   | 'menu'
   | 'customer'
-  | 'verify'
   | 'review'
   | 'status';
 
@@ -89,11 +86,6 @@ export default function OrderPage() {
   });
   const [customerError, setCustomerError] =
     useState('');
-  const [otp, setOtp] = useState('');
-  const [otpError, setOtpError] = useState('');
-
-  const [resendSeconds, setResendSeconds] =
-  useState(30);
 
   const [beanCreditsToUse, setBeanCreditsToUse] =
   useState('');
@@ -257,176 +249,27 @@ void brandName;
     setStep('customer');
   }
 
-async function sendOtp() {
+function continueToReview() {
   if (!customer.firstName.trim()) {
-    setCustomerError(
-      'Please enter your first name.'
-    );
+    setCustomerError('Please enter your first name.');
     return;
   }
 
   if (!customer.lastName.trim()) {
-    setCustomerError(
-      'Please enter your last name.'
-    );
+    setCustomerError('Please enter your last name.');
     return;
   }
 
   if (
     !customer.whatsappNumber ||
-    !isValidPhoneNumber(
-      customer.whatsappNumber
-    )
+    !isValidPhoneNumber(customer.whatsappNumber)
   ) {
-    setCustomerError(
-      'Please enter a valid WhatsApp number.'
-    );
+    setCustomerError('Please enter a valid mobile number.');
     return;
   }
 
-  try {
-    setCustomerError('');
-
-    const { error } =
-      await supabase.auth.signInWithOtp({
-        phone: customer.whatsappNumber,
-        options: {
-          shouldCreateUser: true,
-        },
-      });
-
-    if (error) {
-      throw error;
-    }
-
-    setOtp('');
-    setOtpError('');
-    setResendSeconds(30);
-    setStep('verify');
-  } catch (error) {
-    setCustomerError(
-      error instanceof Error
-        ? error.message
-        : 'Could not send the WhatsApp OTP.'
-    );
-  }
-}
-
-async function resendOtp() {
-  if (
-    resendSeconds > 0 ||
-    !customer.whatsappNumber
-  ) {
-    return;
-  }
-
-  try {
-    setOtpError('');
-
-    const { error } =
-      await supabase.auth.signInWithOtp({
-        phone: customer.whatsappNumber,
-        options: {
-          shouldCreateUser: true,
-        },
-      });
-
-    if (error) {
-      throw error;
-    }
-
-    setOtp('');
-    setResendSeconds(30);
-  } catch (error) {
-    setOtpError(
-      error instanceof Error
-        ? error.message
-        : 'Could not resend the WhatsApp OTP.'
-    );
-  }
-}
-
-async function verifyOtp() {
-  if (!eventSlug) {
-    setOtpError(
-      'This order link is missing its event.'
-    );
-    return;
-  }
-
-  try {
-    setOtpError('');
-
-    const {
-      data: authData,
-      error: authError,
-    } = await supabase.auth.verifyOtp({
-      phone: customer.whatsappNumber,
-      token: otp,
-      type: 'sms',
-    });
-
-    if (
-      authError ||
-      !authData.session?.access_token
-    ) {
-      throw (
-        authError ??
-        new Error(
-          'Could not verify this WhatsApp number.'
-        )
-      );
-    }
-
-    const response = await fetch(
-      '/api/verify-customer',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          eventSlug,
-          accessToken:
-            authData.session.access_token,
-          customer: {
-            firstName:
-              customer.firstName,
-            lastName:
-              customer.lastName,
-            whatsappNumber:
-              customer.whatsappNumber,
-          },
-        }),
-      }
-    );
-
-    const result =
-      await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        result.error ||
-          result.details ||
-          'Could not save this verified customer.'
-      );
-    }
-
-    await supabase.auth.signOut();
-
-    setCustomer((currentCustomer) => ({
-      ...currentCustomer,
-      whatsappVerified: true,
-    }));
-
-    setStep('review');
-  } catch (error) {
-    setOtpError(
-      error instanceof Error
-        ? error.message
-        : 'Could not verify this WhatsApp number.'
-    );
-  }
+  setCustomerError('');
+  setStep('review');
 }
 
   const hasTemperatureData =
@@ -723,26 +566,7 @@ async function verifyOtp() {
         error={customerError}
         onChange={updateCustomer}
         onBack={() => setStep('menu')}
-        onSendOtp={sendOtp}
-      />
-    );
-  }
-
-  if (step === 'verify') {
-    return (
-      <OtpVerification
-        whatsappNumber={
-          customer.whatsappNumber
-        }
-        otp={otp}
-        error={otpError}
-        resendSeconds={resendSeconds}
-        onOtpChange={setOtp}
-        onVerify={verifyOtp}
-        onBack={() =>
-          setStep('customer')
-        }
-        onResend={resendOtp}
+        onContinue={continueToReview}
       />
     );
   }
@@ -1234,7 +1058,7 @@ type CustomerDetailsProps = {
   ) => void;
 
   onBack: () => void;
-  onSendOtp: () => void;
+  onContinue: () => void;
 };
 
 function CustomerDetails({
@@ -1242,7 +1066,7 @@ function CustomerDetails({
   error,
   onChange,
   onBack,
-  onSendOtp,
+  onContinue,
 }: CustomerDetailsProps) {
   const canContinue =
     customer.firstName.trim().length > 0 &&
@@ -1310,7 +1134,7 @@ function CustomerDetails({
 
         <div>
           <label className="mb-2 block text-sm font-medium">
-            WhatsApp number <span className="text-red-500">*</span>
+            mobile number <span className="text-red-500">*</span>
           </label>
           {error && (
               <p className="mt-2 text-sm text-red-600">
@@ -1328,7 +1152,7 @@ function CustomerDetails({
                   value ?? ''
                 )
               }
-              placeholder="Enter WhatsApp number"
+              placeholder="Enter mobile number"
             />
           </div>
         </div>
@@ -1336,10 +1160,10 @@ function CustomerDetails({
         <button
           type="button"
           disabled={!canContinue}
-          onClick={onSendOtp}
+          onClick={onContinue}
           className="min-h-12 w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white disabled:opacity-40 dark:bg-white dark:text-gray-900"
         >
-          Send verification code
+          Continue
         </button>
 
       </div>
