@@ -1,0 +1,51 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "api"
+
+[[redirects]]
+  from = "/api/create-razorpay-order"
+  to = "/.netlify/functions/create-razorpay-order"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/verify-customer"
+  to = "/.netlify/functions/verify-customer"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/verify-razorpay-payment"
+  to = "/.netlify/functions/verify-razorpay-payment"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/razorpay-webhook"
+  to = "/.netlify/functions/razorpay-webhook"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/get-event-menu"
+  to = "/.netlify/functions/get-event-menu"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/ping"
+  to = "/.netlify/functions/ping"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/test-supabase"
+  to = "/.netlify/functions/test-supabase"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/beanbook/*"
+  to = "/beanbook/index.html"
+  status = 200
