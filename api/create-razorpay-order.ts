@@ -322,9 +322,8 @@ export default {
 
       if (
         !existingCustomer ||
-        !['development_mock', 'verified'].includes(
-          existingCustomer.whatsapp_verification_status
-        )
+        existingCustomer.whatsapp_verification_status !==
+          'verified'
       ) {
         return Response.json(
           {
