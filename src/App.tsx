@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import OrderPage from './pages/OrderPage';
 import AdminPage from './pages/AdminPage';
 
+// Customer-facing brand header is intentionally The 8th Coffee Bean.
 function App() {
   return (
     <div className="min-h-screen">
