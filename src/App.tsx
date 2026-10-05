@@ -10,7 +10,7 @@ function App() {
       <header className="border-b border-gray-200 dark:border-gray-800">
         <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
           <Link to="/" className="font-semibold tracking-tight">
-            BeanBook
+            The 8th Coffee Bean
           </Link>
 
           <div className="flex items-center gap-4 text-sm">
