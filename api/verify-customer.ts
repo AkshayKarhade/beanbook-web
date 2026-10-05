@@ -2,7 +2,7 @@ import { supabaseAdmin } from '../lib/supabase-server';
 
 type VerifyCustomerRequest = {
   eventSlug?: string;
-  otp?: string;
+  accessToken?: string;
   customer?: {
     firstName?: string;
     lastName?: string;
@@ -43,20 +43,23 @@ export default {
         (await request.json()) as VerifyCustomerRequest;
 
       const eventSlug = body.eventSlug?.trim();
+      const accessToken = body.accessToken?.trim();
       const firstName =
         body.customer?.firstName?.trim();
       const lastName =
         body.customer?.lastName?.trim();
       const whatsappNumber =
         body.customer?.whatsappNumber?.trim();
-      const otp = body.otp?.trim();
 
       if (
         !eventSlug ||
+        !accessToken ||
         !firstName ||
         !lastName ||
         !whatsappNumber ||
-        !/^\+[1-9]\d{7,14}$/.test(whatsappNumber)
+        !/^\+[1-9]\d{7,14}$/.test(
+          whatsappNumber
+        )
       ) {
         return Response.json(
           { error: 'Invalid customer details' },
@@ -64,12 +67,24 @@ export default {
         );
       }
 
-      // Development-only verification until a real
-      // WhatsApp OTP provider is connected.
-      if (otp !== '123456') {
+      const {
+        data: authData,
+        error: authError,
+      } = await supabaseAdmin.auth.getUser(
+        accessToken
+      );
+
+      if (
+        authError ||
+        !authData.user ||
+        authData.user.phone !== whatsappNumber
+      ) {
         return Response.json(
-          { error: 'Invalid verification code' },
-          { status: 400 }
+          {
+            error:
+              'WhatsApp verification could not be confirmed',
+          },
+          { status: 401 }
         );
       }
 
@@ -96,15 +111,15 @@ export default {
 
       const fullName =
         `${firstName} ${lastName}`.trim();
+      const verifiedAt =
+        new Date().toISOString();
 
       const {
         data: existingCustomer,
         error: lookupError,
       } = await supabaseAdmin
         .from('customers')
-        .select(
-          'id, whatsapp_verification_status, whatsapp_verified_at'
-        )
+        .select('id')
         .eq('brand_id', event.brand_id)
         .eq('phone', whatsappNumber)
         .maybeSingle();
@@ -114,12 +129,6 @@ export default {
       }
 
       if (existingCustomer) {
-        const verificationStatus =
-          existingCustomer.whatsapp_verification_status ===
-          'verified'
-            ? 'verified'
-            : 'development_mock';
-
         const { error: updateError } =
           await supabaseAdmin
             .from('customers')
@@ -129,13 +138,10 @@ export default {
               last_name: lastName,
               phone: whatsappNumber,
               whatsapp_verification_status:
-                verificationStatus,
+                'verified',
               whatsapp_verified_at:
-                verificationStatus === 'verified'
-                  ? existingCustomer.whatsapp_verified_at
-                  : null,
-              updated_at:
-                new Date().toISOString(),
+                verifiedAt,
+              updated_at: verifiedAt,
             })
             .eq('id', existingCustomer.id);
 
@@ -145,7 +151,7 @@ export default {
 
         return Response.json({
           verified: true,
-          verificationStatus,
+          verificationStatus: 'verified',
           customerId: existingCustomer.id,
         });
       }
@@ -162,10 +168,9 @@ export default {
           last_name: lastName,
           phone: whatsappNumber,
           whatsapp_verification_status:
-            'development_mock',
-          whatsapp_verified_at: null,
-          updated_at:
-            new Date().toISOString(),
+            'verified',
+          whatsapp_verified_at: verifiedAt,
+          updated_at: verifiedAt,
         })
         .select('id')
         .single();
@@ -176,8 +181,7 @@ export default {
 
       return Response.json({
         verified: true,
-        verificationStatus:
-          'development_mock',
+        verificationStatus: 'verified',
         customerId: newCustomer.id,
       });
     } catch (error) {
