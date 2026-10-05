@@ -74,6 +74,27 @@ export default {
       if (brandError) throw brandError;
 
       const {
+        data: inventoryUnit,
+        error: inventoryUnitError,
+      } = await supabaseAdmin
+        .from('inventory_units')
+        .select('id')
+        .eq('legacy_event_id', event.id)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (inventoryUnitError) {
+        throw inventoryUnitError;
+      }
+
+      if (!inventoryUnit) {
+        return Response.json(
+          { error: 'Inventory unit is not configured for this fridge' },
+          { status: 409 }
+        );
+      }
+
+      const {
         data: eventProducts,
         error: eventProductsError,
       } = await supabaseAdmin
@@ -103,9 +124,9 @@ export default {
         data: inventory,
         error: inventoryError,
       } = await supabaseAdmin
-        .from('event_inventory')
+        .from('inventory_balances')
         .select('product_id, quantity_on_hand')
-        .eq('event_id', event.id);
+        .eq('inventory_unit_id', inventoryUnit.id);
 
       if (inventoryError) {
         throw inventoryError;
