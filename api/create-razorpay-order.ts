@@ -309,7 +309,9 @@ export default {
         error: customerLookupError,
       } = await supabaseAdmin
         .from('customers')
-        .select('id')
+        .select(
+          'id, whatsapp_verification_status'
+        )
         .eq('brand_id', event.brand_id)
         .eq('phone', customer.whatsappNumber)
         .maybeSingle();
@@ -318,42 +320,41 @@ export default {
         throw customerLookupError;
       }
 
-      let customerId: string;
+      if (
+        !existingCustomer ||
+        !['development_mock', 'verified'].includes(
+          existingCustomer.whatsapp_verification_status
+        )
+      ) {
+        return Response.json(
+          {
+            error:
+              'Please verify your WhatsApp number before payment',
+          },
+          { status: 409 }
+        );
+      }
 
-      if (existingCustomer) {
-        customerId = existingCustomer.id;
+      const customerId = existingCustomer.id;
 
-        const { error: customerUpdateError } =
-          await supabaseAdmin
-            .from('customers')
-            .update({
-              name: customerName,
-              phone: customer.whatsappNumber,
-            })
-            .eq('id', customerId);
-
-        if (customerUpdateError) {
-          throw customerUpdateError;
-        }
-      } else {
-        const {
-          data: newCustomer,
-          error: customerInsertError,
-        } = await supabaseAdmin
+      const { error: customerUpdateError } =
+        await supabaseAdmin
           .from('customers')
-          .insert({
-            brand_id: event.brand_id,
+          .update({
             name: customerName,
-            phone: customer.whatsappNumber,
+            first_name:
+              customer.firstName.trim(),
+            last_name:
+              customer.lastName.trim(),
+            phone:
+              customer.whatsappNumber,
+            updated_at:
+              new Date().toISOString(),
           })
-          .select('id')
-          .single();
+          .eq('id', customerId);
 
-        if (customerInsertError) {
-          throw customerInsertError;
-        }
-
-        customerId = newCustomer.id;
+      if (customerUpdateError) {
+        throw customerUpdateError;
       }
 
       const orderNumber =
