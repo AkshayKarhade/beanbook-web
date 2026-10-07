@@ -134,7 +134,7 @@ export default {
         error: inventoryUnitError,
       } = await supabaseAdmin
         .from('inventory_units')
-        .select('id')
+        .select('id, track_inventory')
         .eq('legacy_event_id', event.id)
         .eq('status', 'active')
         .maybeSingle();
@@ -260,13 +260,15 @@ export default {
             );
           }
 
-          const quantityOnHand =
-            inventoryByProduct.get(product.id) ?? 0;
+          if (inventoryUnit.track_inventory) {
+            const quantityOnHand =
+              inventoryByProduct.get(product.id) ?? 0;
 
-          if (requestItem.quantity > quantityOnHand) {
-            throw new Error(
-              `Insufficient stock for product: ${product.id}`
-            );
+            if (requestItem.quantity > quantityOnHand) {
+              throw new Error(
+                `Insufficient stock for product: ${product.id}`
+              );
+            }
           }
 
           const priceRupees = Number(
