@@ -49,3 +49,9 @@
   from = "/beanbook/*"
   to = "/beanbook/index.html"
   status = 200
+
+[[redirects]]
+  from = "/order/*"
+  to = "/beanbook/order/:splat"
+  status = 301
+  force = true
