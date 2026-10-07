@@ -14,6 +14,8 @@ type RequestCustomer = {
   whatsappNumber: string;
 };
 
+type FulfillmentType = 'pickup' | 'delivery';
+
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -127,6 +129,62 @@ export default {
           { error: 'Event not found or inactive' },
           { status: 404 }
         );
+      }
+
+      let fulfillmentType: FulfillmentType | null = null;
+      let deliveryAddress: string | null = null;
+      let deliveryPhone: string | null = null;
+
+      if (event.slug === 'direct-delivery') {
+        const requestedFulfillmentType =
+          body?.fulfillmentType;
+
+        if (
+          requestedFulfillmentType !== 'pickup' &&
+          requestedFulfillmentType !== 'delivery'
+        ) {
+          return Response.json(
+            { error: 'Please select pickup or delivery' },
+            { status: 400 }
+          );
+        }
+
+        fulfillmentType = requestedFulfillmentType;
+
+        if (fulfillmentType === 'delivery') {
+          const requestedAddress =
+            body?.deliveryAddress;
+          const requestedDeliveryPhone =
+            body?.deliveryPhone;
+
+          if (
+            typeof requestedAddress !== 'string' ||
+            requestedAddress.trim().length < 5 ||
+            requestedAddress.trim().length > 1000
+          ) {
+            return Response.json(
+              { error: 'A valid delivery address is required' },
+              { status: 400 }
+            );
+          }
+
+          if (
+            typeof requestedDeliveryPhone !== 'string' ||
+            !/^\+[1-9]\d{7,14}$/.test(
+              requestedDeliveryPhone
+            )
+          ) {
+            return Response.json(
+              { error: 'A valid delivery phone number is required' },
+              { status: 400 }
+            );
+          }
+
+          deliveryAddress =
+            requestedAddress.trim();
+          deliveryPhone =
+            requestedDeliveryPhone;
+        }
       }
 
       const {
@@ -381,6 +439,9 @@ export default {
           customer_id: customerId,
           order_number: orderNumber,
           total_amount: totalAmountRupees,
+          fulfillment_type: fulfillmentType,
+          delivery_address: deliveryAddress,
+          delivery_phone: deliveryPhone,
         })
         .select('id, order_number')
         .single();
@@ -425,6 +486,8 @@ export default {
                 orderNumber,
               beanbook_event_slug:
                 event.slug,
+              beanbook_fulfillment:
+                fulfillmentType ?? 'event',
             },
           });
       } catch (error) {
