@@ -1,3 +1,4 @@
+// Direct-order fulfilment UI: delivery/pickup, address and delivery phone.
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
