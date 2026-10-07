@@ -635,12 +635,15 @@ function continueToReview() {
 
           <div>
             <h1 className="text-2xl font-semibold">
-              Coffee Menu
+              {eventSlug === 'direct-delivery'
+                ? 'Direct Order'
+                : 'Coffee Menu'}
             </h1>
 
             <p className="mt-1 text-gray-600 dark:text-gray-400">
-              Find your coffee and add it
-              to your order.
+              {eventSlug === 'direct-delivery'
+                ? 'Order directly from The 8th Coffee Bean.'
+                : 'Find your coffee and add it to your order.'}
             </p>
           </div>
 
