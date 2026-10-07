@@ -78,7 +78,7 @@ export default {
         error: inventoryUnitError,
       } = await supabaseAdmin
         .from('inventory_units')
-        .select('id')
+        .select('id, track_inventory')
         .eq('legacy_event_id', event.id)
         .eq('status', 'active')
         .maybeSingle();
@@ -150,7 +150,9 @@ export default {
           }
 
           const quantityOnHand =
-            stockByProduct.get(product.id) ?? 0;
+            inventoryUnit.track_inventory
+              ? stockByProduct.get(product.id) ?? 0
+              : 20;
 
           return {
             id: product.id,
@@ -162,7 +164,8 @@ export default {
             quantity_on_hand: quantityOnHand,
             available:
               row.is_available &&
-              quantityOnHand > 0,
+              (!inventoryUnit.track_inventory ||
+                quantityOnHand > 0),
           };
         })
         .filter(Boolean);
