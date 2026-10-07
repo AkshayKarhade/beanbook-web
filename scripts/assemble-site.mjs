@@ -14,7 +14,6 @@ await copyFile(source, destination);
 await writeFile(
   redirectsDestination,
   [
-    '/order/* /beanbook/order/:splat 302!',
     '/beanbook/* /beanbook/index.html 200',
     '',
   ].join('\n'),
