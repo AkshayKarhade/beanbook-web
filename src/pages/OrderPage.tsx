@@ -22,6 +22,7 @@ import type {
 
 type TemperatureFilter = 'All' | DrinkTemperature;
 type BrewFilter = 'All' | BrewMethod;
+type FulfillmentType = 'pickup' | 'delivery';
 
 type EventMenuResponse = {
   event: {
@@ -98,6 +99,15 @@ export default function OrderPage() {
 
   const [order, setOrder] =
     useState<Order | null>(null);
+
+  const [fulfillmentType, setFulfillmentType] =
+    useState<FulfillmentType>('delivery');
+  const [deliveryAddress, setDeliveryAddress] =
+    useState('');
+  const [deliveryPhone, setDeliveryPhone] =
+    useState('');
+  const [fulfillmentError, setFulfillmentError] =
+    useState('');
 
   function addItem(itemId: string) {
     const item = menuItems.find(
@@ -269,6 +279,13 @@ function continueToReview() {
   }
 
   setCustomerError('');
+
+  if (eventSlug === 'direct-delivery') {
+    setDeliveryPhone((currentPhone) =>
+      currentPhone || customer.whatsappNumber
+    );
+  }
+
   setStep('review');
 }
 
@@ -336,6 +353,34 @@ function continueToReview() {
       0
     );
 
+  function openPaymentModal() {
+    if (eventSlug === 'direct-delivery') {
+      if (fulfillmentType === 'delivery') {
+        if (deliveryAddress.trim().length < 5) {
+          setFulfillmentError(
+            'Please enter a delivery address.'
+          );
+          return;
+        }
+
+        if (
+          !deliveryPhone ||
+          !isValidPhoneNumber(deliveryPhone)
+        ) {
+          setFulfillmentError(
+            'Please enter a valid delivery phone number.'
+          );
+          return;
+        }
+      }
+
+      setFulfillmentError('');
+    }
+
+    setPaymentMethod('razorpay');
+    setShowPaymentModal(true);
+  }
+
   async function confirmPayment() {
     if (!eventSlug) {
       window.alert(
@@ -366,6 +411,20 @@ function continueToReview() {
               menuItemId: item.id,
               quantity: cart[item.id],
             })),
+            fulfillmentType:
+              eventSlug === 'direct-delivery'
+                ? fulfillmentType
+                : undefined,
+            deliveryAddress:
+              eventSlug === 'direct-delivery' &&
+              fulfillmentType === 'delivery'
+                ? deliveryAddress.trim()
+                : undefined,
+            deliveryPhone:
+              eventSlug === 'direct-delivery' &&
+              fulfillmentType === 'delivery'
+                ? deliveryPhone
+                : undefined,
             paymentMethod: 'razorpay',
           }),
         }
@@ -585,16 +644,30 @@ function continueToReview() {
           beanCreditsToUse={beanCreditsToUse}
           beanCreditsUsed={beanCreditsUsed}
           finalAmount={finalAmount}
+          isDirectOrder={eventSlug === 'direct-delivery'}
+          fulfillmentType={fulfillmentType}
+          deliveryAddress={deliveryAddress}
+          deliveryPhone={deliveryPhone}
+          fulfillmentError={fulfillmentError}
+          onFulfillmentTypeChange={(value) => {
+            setFulfillmentType(value);
+            setFulfillmentError('');
+          }}
+          onDeliveryAddressChange={(value) => {
+            setDeliveryAddress(value);
+            setFulfillmentError('');
+          }}
+          onDeliveryPhoneChange={(value) => {
+            setDeliveryPhone(value);
+            setFulfillmentError('');
+          }}
           onBeanCreditsChange={(value: string) => {
             setBeanCreditsToUse(value);
             }}
           onBack={() =>
             setStep('menu')
           }
-          onPayNow={() => {
-            setPaymentMethod('razorpay');
-            setShowPaymentModal(true);
-          }}
+          onPayNow={openPaymentModal}
         />
 
         {showPaymentModal && (
@@ -1183,6 +1256,14 @@ type OrderReviewProps = {
   beanCreditsToUse: string;
   beanCreditsUsed: number;
   finalAmount: number;
+  isDirectOrder: boolean;
+  fulfillmentType: FulfillmentType;
+  deliveryAddress: string;
+  deliveryPhone: string;
+  fulfillmentError: string;
+  onFulfillmentTypeChange: (value: FulfillmentType) => void;
+  onDeliveryAddressChange: (value: string) => void;
+  onDeliveryPhoneChange: (value: string) => void;
   onBeanCreditsChange: (value: string) => void;
   onBack: () => void;
   onPayNow: () => void;
@@ -1199,6 +1280,14 @@ function OrderReview({
   beanCreditsToUse,
   beanCreditsUsed,
   finalAmount,
+  isDirectOrder,
+  fulfillmentType,
+  deliveryAddress,
+  deliveryPhone,
+  fulfillmentError,
+  onFulfillmentTypeChange,
+  onDeliveryAddressChange,
+  onDeliveryPhoneChange,
   onBeanCreditsChange,
   onBack,
   onPayNow,
@@ -1409,6 +1498,84 @@ function OrderReview({
         </div>
 
       </div>
+
+      {isDirectOrder && (
+        <div className="mt-6 rounded-xl border border-gray-200 p-5 dark:border-gray-800">
+          <h2 className="font-semibold">
+            How would you like to receive your order?
+          </h2>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            {(['delivery', 'pickup'] as FulfillmentType[]).map(
+              (option) => (
+                <label
+                  key={option}
+                  className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 ${
+                    fulfillmentType === option
+                      ? 'border-gray-900 dark:border-white'
+                      : 'border-gray-300 dark:border-gray-700'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="fulfillmentType"
+                    value={option}
+                    checked={fulfillmentType === option}
+                    onChange={() =>
+                      onFulfillmentTypeChange(option)
+                    }
+                  />
+                  <span className="font-medium capitalize">
+                    {option}
+                  </span>
+                </label>
+              )
+            )}
+          </div>
+
+          {fulfillmentType === 'delivery' && (
+            <div className="mt-5 space-y-5">
+              <div>
+                <label className="mb-2 block text-sm font-medium">
+                  Delivery address <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={deliveryAddress}
+                  onChange={(event) =>
+                    onDeliveryAddressChange(event.target.value)
+                  }
+                  placeholder="House / flat, building, street, area, landmark and PIN code"
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-950"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium">
+                  Phone number <span className="text-red-500">*</span>
+                </label>
+                <div className="rounded-lg border border-gray-300 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-950">
+                  <PhoneInput
+                    international
+                    defaultCountry="IN"
+                    value={deliveryPhone}
+                    onChange={(value) =>
+                      onDeliveryPhoneChange(value ?? '')
+                    }
+                    placeholder="Delivery contact number"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {fulfillmentError && (
+            <p className="mt-4 text-sm text-red-600">
+              {fulfillmentError}
+            </p>
+          )}
+        </div>
+      )}
 
       <button
         type="button"
