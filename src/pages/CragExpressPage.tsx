@@ -153,6 +153,7 @@ export default function CragExpressPage() {
     startingRef.current = true;
     setIsStarting(true);
     setCheckoutError('');
+    let checkoutOpened = false;
 
     try {
       const response = await fetch('/api/create-razorpay-order', {
@@ -193,18 +194,27 @@ export default function CragExpressPage() {
           setOrderNumber(created.orderNumber);
           void verifyPayment(payment);
         },
+        modal: {
+          ondismiss: () => {
+            startingRef.current = false;
+            setIsStarting(false);
+          },
+        },
         theme: { color: '#222222' },
       });
 
       checkout.open();
+      checkoutOpened = true;
     } catch (error) {
       console.error('Unable to start CRAG express checkout:', error);
       setCheckoutError(
         error instanceof Error ? error.message : 'Unable to start payment. Please retry.'
       );
     } finally {
-      startingRef.current = false;
-      setIsStarting(false);
+      if (!checkoutOpened) {
+        startingRef.current = false;
+        setIsStarting(false);
+      }
     }
   }
 
