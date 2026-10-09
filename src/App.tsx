@@ -3,6 +3,7 @@ import { Link, Route, Routes } from 'react-router-dom';
 import Home from './pages/Home';
 import OrderPage from './pages/OrderPage';
 import AdminPage from './pages/AdminPage';
+import CragExpressPage from './pages/CragExpressPage';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/order" element={<OrderPage />} />
+          <Route path="/order/crag-fridge" element={<CragExpressPage />} />
           <Route path="/order/:eventSlug" element={<OrderPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>
