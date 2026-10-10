@@ -7,11 +7,15 @@ import CragExpressPage from './pages/CragExpressPage';
 
 function App() {
   const isCragExpress = useMatch('/order/crag-fridge');
+  const isScanPay = useMatch('/scan/:eventSlug');
 
-  if (isCragExpress) {
+  if (isCragExpress || isScanPay) {
     return (
       <main className="min-h-screen px-4 py-6">
-        <CragExpressPage />
+        <Routes>
+          <Route path="/order/crag-fridge" element={<CragExpressPage />} />
+          <Route path="/scan/:eventSlug" element={<CragExpressPage />} />
+        </Routes>
       </main>
     );
   }
