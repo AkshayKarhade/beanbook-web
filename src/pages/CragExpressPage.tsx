@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
 
 type FridgeProduct = {
   id: string;
@@ -10,6 +11,7 @@ type FridgeProduct = {
 };
 
 type MenuResponse = {
+  event?: { name?: string; location?: string | null };
   products: Array<{
     id: string;
     name: string;
@@ -38,10 +40,12 @@ type RazorpayWindow = Window & {
   Razorpay?: new (options: Record<string, unknown>) => RazorpayCheckout;
 };
 
-const EVENT_SLUG = 'crag-fridge';
 const currency = (amount: number) => '₹' + amount.toLocaleString('en-IN');
 
 export default function CragExpressPage() {
+  const { eventSlug } = useParams();
+  const locationSlug = eventSlug || 'crag-fridge';
+  const [locationName, setLocationName] = useState('');
   const [products, setProducts] = useState<FridgeProduct[]>([]);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [menuLoading, setMenuLoading] = useState(true);
@@ -58,7 +62,7 @@ export default function CragExpressPage() {
     async function loadMenu() {
       try {
         const response = await fetch(
-          '/api/get-event-menu?event=' + encodeURIComponent(EVENT_SLUG),
+          '/api/get-event-menu?event=' + encodeURIComponent(locationSlug),
           { signal: controller.signal }
         );
 
@@ -71,6 +75,7 @@ export default function CragExpressPage() {
           throw new Error('The fridge menu is unavailable.');
         }
 
+        setLocationName(menu.event?.location || menu.event?.name || locationSlug.replace(/-/g, ' '));
         setProducts(menu.products.map((product) => ({
           id: product.id,
           name: product.name,
@@ -81,7 +86,7 @@ export default function CragExpressPage() {
         })));
       } catch (error) {
         if (controller.signal.aborted) return;
-        console.error('Unable to load CRAG menu:', error);
+        console.error('Unable to load fridge menu:', error);
         setMenuError('We could not load the fridge menu. Please try again.');
       } finally {
         if (!controller.signal.aborted) setMenuLoading(false);
@@ -90,7 +95,7 @@ export default function CragExpressPage() {
 
     void loadMenu();
     return () => controller.abort();
-  }, []);
+  }, [locationSlug]);
 
   function changeQuantity(product: FridgeProduct, delta: number) {
     if (isStarting) return;
@@ -160,7 +165,8 @@ export default function CragExpressPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          eventSlug: EVENT_SLUG,
+          eventSlug: locationSlug,
+          checkoutMode: 'scan-pay',
           items: selectedProducts.map((product) => ({
             menuItemId: product.id,
             quantity: quantities[product.id],
@@ -188,7 +194,7 @@ export default function CragExpressPage() {
         amount: created.amount,
         currency: created.currency,
         name: 'The 8th Coffee Bean',
-        description: 'CRAG Studio cold brew',
+        description: locationName ? 'Cold brew at ' + locationName : 'Cold brew bottles',
         order_id: created.razorpayOrderId,
         handler: (payment: RazorpayPaymentResponse) => {
           setOrderNumber(created.orderNumber);
@@ -206,7 +212,7 @@ export default function CragExpressPage() {
       checkout.open();
       checkoutOpened = true;
     } catch (error) {
-      console.error('Unable to start CRAG express checkout:', error);
+      console.error('Unable to start express checkout:', error);
       setCheckoutError(
         error instanceof Error ? error.message : 'Unable to start payment. Please retry.'
       );
@@ -263,7 +269,7 @@ export default function CragExpressPage() {
 
   return (
     <section className="mx-auto max-w-3xl pb-28">
-      <h1 className="text-2xl font-bold">Cold Brews at CRAG Studio</h1>
+      <h1 className="text-2xl font-bold">Cold Brews at {locationName || 'The 8th Coffee Bean'}</h1>
       <p className="mt-2 text-gray-600 dark:text-gray-400">
         Choose your bottles and pay. That's it.
       </p>
