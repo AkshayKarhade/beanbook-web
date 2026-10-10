@@ -166,6 +166,7 @@ export default function CragExpressPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           eventSlug: locationSlug,
+          checkoutMode: 'scan-pay',
           items: selectedProducts.map((product) => ({
             menuItemId: product.id,
             quantity: quantities[product.id],
