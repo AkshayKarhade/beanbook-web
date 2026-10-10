@@ -118,16 +118,19 @@ export default {
       const isCragExpress = event.slug === 'crag-fridge';
 
       if (
-        !isCragExpress && (
+        !isCragExpress &&
+        (
           !customer ||
-        typeof customer.firstName !== 'string' ||
-        !customer.firstName.trim() ||
-        typeof customer.lastName !== 'string' ||
-        !customer.lastName.trim() ||
-        typeof customer.whatsappNumber !== 'string' ||
-        !/^\+[1-9]\d{7,14}$/.test(
-          customer.whatsappNumber
-        )) {
+          typeof customer.firstName !== 'string' ||
+          !customer.firstName.trim() ||
+          typeof customer.lastName !== 'string' ||
+          !customer.lastName.trim() ||
+          typeof customer.whatsappNumber !== 'string' ||
+          !/^\+[1-9]\d{7,14}$/.test(
+            customer.whatsappNumber
+          )
+        )
+      ) {
         return Response.json(
           { error: 'Invalid customer details' },
           { status: 400 }
