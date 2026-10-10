@@ -114,11 +114,12 @@ export default {
         );
       }
 
-      // Guest checkout is exclusively allowed for the CRAG fridge.
-      const isCragExpress = event.slug === 'crag-fridge';
+      // Guest Scan & Pay checkout is restricted to inventory-tracked pickup locations.
+      const isGuestCheckout = event.slug === 'crag-fridge' ||
+        (body?.checkoutMode === 'scan-pay' && event.slug !== 'direct-delivery');
 
       if (
-        !isCragExpress &&
+        !isGuestCheckout &&
         (
           !customer ||
           typeof customer.firstName !== 'string' ||
@@ -210,6 +211,13 @@ export default {
       if (!inventoryUnit) {
         return Response.json(
           { error: 'Inventory unit is not configured for this fridge' },
+          { status: 409 }
+        );
+      }
+
+      if (isGuestCheckout && !inventoryUnit.track_inventory) {
+        return Response.json(
+          { error: 'Scan & Pay requires inventory tracking at this location' },
           { status: 409 }
         );
       }
@@ -367,9 +375,9 @@ export default {
       const finalAmountPaise =
         Math.round(totalAmountRupees * 100);
 
-      // No fabricated customer profile for walk-up CRAG purchases.
+      // No fabricated customer profile for guest fridge purchases.
       let customerId: string | null = null;
-      if (!isCragExpress && customer) {
+      if (!isGuestCheckout && customer) {
       const customerName =
         `${customer.firstName.trim()} ${customer.lastName.trim()}`.trim();
 
