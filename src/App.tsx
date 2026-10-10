@@ -1,10 +1,21 @@
-import { Link, Route, Routes } from 'react-router-dom';
+import { Link, Route, Routes, useMatch } from 'react-router-dom';
 
 import Home from './pages/Home';
 import OrderPage from './pages/OrderPage';
 import AdminPage from './pages/AdminPage';
+import CragExpressPage from './pages/CragExpressPage';
 
 function App() {
+  const isCragExpress = useMatch('/order/crag-fridge');
+
+  if (isCragExpress) {
+    return (
+      <main className="min-h-screen px-4 py-6">
+        <CragExpressPage />
+      </main>
+    );
+  }
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-gray-200 dark:border-gray-800">
@@ -26,6 +37,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/order" element={<OrderPage />} />
+          <Route path="/order/crag-fridge" element={<CragExpressPage />} />
           <Route path="/order/:eventSlug" element={<OrderPage />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>

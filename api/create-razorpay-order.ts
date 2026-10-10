@@ -76,23 +76,6 @@ export default {
         );
       }
 
-      if (
-        !customer ||
-        typeof customer.firstName !== 'string' ||
-        !customer.firstName.trim() ||
-        typeof customer.lastName !== 'string' ||
-        !customer.lastName.trim() ||
-        typeof customer.whatsappNumber !== 'string' ||
-        !/^\+[1-9]\d{7,14}$/.test(
-          customer.whatsappNumber
-        )
-      ) {
-        return Response.json(
-          { error: 'Invalid customer details' },
-          { status: 400 }
-        );
-      }
-
       if (paymentMethod !== 'razorpay') {
         return Response.json(
           { error: 'Invalid payment method' },
@@ -128,6 +111,29 @@ export default {
         return Response.json(
           { error: 'Event not found or inactive' },
           { status: 404 }
+        );
+      }
+
+      // Guest checkout is exclusively allowed for the CRAG fridge.
+      const isCragExpress = event.slug === 'crag-fridge';
+
+      if (
+        !isCragExpress &&
+        (
+          !customer ||
+          typeof customer.firstName !== 'string' ||
+          !customer.firstName.trim() ||
+          typeof customer.lastName !== 'string' ||
+          !customer.lastName.trim() ||
+          typeof customer.whatsappNumber !== 'string' ||
+          !/^\+[1-9]\d{7,14}$/.test(
+            customer.whatsappNumber
+          )
+        )
+      ) {
+        return Response.json(
+          { error: 'Invalid customer details' },
+          { status: 400 }
         );
       }
 
@@ -361,6 +367,9 @@ export default {
       const finalAmountPaise =
         Math.round(totalAmountRupees * 100);
 
+      // No fabricated customer profile for walk-up CRAG purchases.
+      let customerId: string | null = null;
+      if (!isCragExpress && customer) {
       const customerName =
         `${customer.firstName.trim()} ${customer.lastName.trim()}`.trim();
 
@@ -378,7 +387,7 @@ export default {
         throw customerLookupError;
       }
 
-      let customerId = existingCustomer?.id;
+      customerId = existingCustomer?.id ?? null;
 
       if (customerId) {
         const { error: customerUpdateError } =
@@ -420,6 +429,8 @@ export default {
         }
 
         customerId = newCustomer.id;
+      }
+
       }
 
       const orderNumber =
