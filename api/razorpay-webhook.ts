@@ -4,6 +4,7 @@ import {
 } from 'node:crypto';
 
 import { supabaseAdmin } from '../lib/supabase-server';
+import { notifyPaidOrder } from '../lib/paid-order-email';
 
 type RazorpayWebhookPayment = {
   id?: string;
@@ -178,6 +179,8 @@ export default {
     if (finalizeError) {
       throw finalizeError;
     }
+
+    await notifyPaidOrder(beanbookOrder.id);
 
     return Response.json({
       received: true,
