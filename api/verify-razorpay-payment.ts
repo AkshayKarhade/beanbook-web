@@ -5,6 +5,7 @@ import {
 } from 'node:crypto';
 
 import { supabaseAdmin } from '../lib/supabase-server';
+import { notifyPaidOrder } from '../lib/paid-order-email';
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
@@ -176,6 +177,8 @@ export default {
       if (finalizeError) {
         throw finalizeError;
       }
+
+      await notifyPaidOrder(beanbookOrder.id);
 
       const stockIssue =
         finalizeResult?.stock_issue === true;
