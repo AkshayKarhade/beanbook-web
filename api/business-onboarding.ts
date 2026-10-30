@@ -75,7 +75,7 @@ export default async function businessOnboarding(request: Request) {
       return json({ status: 'credentials_set' });
     }
 
-    if (invitation.status === 'activated') return json({ status: 'completed' });
+    if (invitation.status === 'activated') return json({ status: 'already_completed' });
     if (invitation.status === 'sent') return json({ status: 'awaiting_credentials' });
     if (invitation.status === 'sending_confirmation') {
       const stale = !invitation.confirmation_started_at ||
