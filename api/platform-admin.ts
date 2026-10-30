@@ -217,7 +217,7 @@ export default async function platformAdmin(request: Request) {
         await supabaseAdmin.from('platform_audit').insert({
           actor_user_id:userId, action:'business_owner_invited', brand_id:brandId, details:{ email },
         });
-        return json({ sent:true, message:'Invitation accepted by email provider.' });
+        return json({ sent:true, status:'sent', message:'Business Admin invitation email sent to ' + email + ' for ' + business.name + '. Account activation is pending.' });
       }
 
       return json({ error: 'Unknown action.' }, 400);
