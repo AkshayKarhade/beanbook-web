@@ -45,7 +45,11 @@ export default function PlatformAdminPage(){
     try{
       const result=await request('login',{username,password});
       if(!supabase)throw new Error('Supabase configuration is unavailable.');
-      const established=await supabase.auth.setSession({access_token:result.access_token,refresh_token:result.refresh_token});
+      const accessToken=result.access_token;
+      const refreshToken=result.refresh_token;
+      if(typeof accessToken!=='string'||typeof refreshToken!=='string'||!accessToken||!refreshToken)
+        throw new Error('Platform API did not return a valid login session.');
+      const established=await supabase.auth.setSession({access_token:accessToken,refresh_token:refreshToken});
       if(established.error)throw established.error;
       setToken(established.data.session?.access_token||'');
       await refresh(established.data.session!.access_token);
@@ -59,7 +63,7 @@ export default function PlatformAdminPage(){
       const session=await supabase?.auth.getSession();
       const t=session?.data.session?.access_token||token;
       const response=await request(name,payload,t);
-      setNotice(response.message||'Saved successfully.');done?.();await refresh(t);
+      setNotice(typeof response.message==='string'?response.message:'Saved successfully.');done?.();await refresh(t);
     }catch(e){setError(e instanceof Error?e.message:'Request failed');}
     finally{setBusy(false);}
   }
