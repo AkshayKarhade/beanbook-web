@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminBackendConfigured } from './client';
 import LoginPanel from './LoginPanel';
@@ -16,11 +16,8 @@ const nav: { id: Section; name: string; icon: string; step: number }[] = [
 ];
 
 export default function BusinessWorkspace() {
-  const { loading, error, session, signOut, updateBusinessName } = useBusinessSession();
+  const { loading, error, session, signOut } = useBusinessSession();
   const [section, setSection] = useState<Section>('overview');
-  const [nameDraft, setNameDraft] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState('');
 
   if (!adminBackendConfigured) {
     return (
@@ -42,15 +39,6 @@ export default function BusinessWorkspace() {
   if (!session) {
     if (!error) return <LoginPanel />;
     return <div className="min-h-screen bg-[#f5f3ef] p-8"><div className="mx-auto mt-16 max-w-lg rounded-3xl bg-white p-8"><h1 className="text-2xl font-semibold">Workspace access unavailable</h1><p role="alert" className="mt-3 text-sm text-red-700">{error}</p><p className="mt-3 text-sm text-zinc-500">Ask a BeanBook administrator to confirm your invitation. An authenticated account alone does not grant business access.</p><button className="mt-6 rounded-xl bg-zinc-900 px-5 py-3 text-white" onClick={()=>void signOut()}>Sign out</button></div></div>;
-  }
-
-  async function saveName(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (nameDraft === null) return;
-    setSaving(true); setNotice('');
-    try { await updateBusinessName(nameDraft); setNameDraft(null); setNotice('Business name saved.'); }
-    catch (e) { setNotice(e instanceof Error ? e.message : 'Could not save settings.'); }
-    finally { setSaving(false); }
   }
 
   const current = nav.find((item) => item.id === section)!;
@@ -97,14 +85,13 @@ export default function BusinessWorkspace() {
             </div>
           </>}
           {section==='settings' && <div className="max-w-2xl rounded-3xl border border-[#e6e3dc] bg-white p-7 sm:p-9">
-            <h3 className="text-xl font-semibold">Business profile</h3><p className="mt-2 text-sm leading-6 text-zinc-500">Your business identity is loaded from the database, never hardcoded into the application.</p>
-            <form onSubmit={saveName} className="mt-7 space-y-5">
-              <div><label htmlFor="business-name" className="mb-2 block text-sm font-medium">Display name</label><input id="business-name" value={nameDraft ?? session.businessName} onChange={e=>setNameDraft(e.target.value)} disabled={session.role!=='owner'} maxLength={120} required className="w-full rounded-xl border border-zinc-200 px-4 py-3 disabled:bg-zinc-50" /></div>
-              <div><p className="text-sm font-medium">Your access</p><p className="mt-1 text-sm text-zinc-500">{session.email} · {session.role}</p></div>
-              {notice && <p role="status" className="text-sm text-[#4f7959]">{notice}</p>}
-              <button disabled={saving || session.role!=='owner' || nameDraft===null} className="rounded-xl bg-[#1b2822] px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">{saving?'Saving…':'Save changes'}</button>
-              {session.role!=='owner' && <p className="text-xs text-zinc-500">Only business owners can edit the business profile.</p>}
-            </form>
+            <h3 className="text-xl font-semibold">Business profile</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Account identity and business ownership are configured centrally by the BeanBook Platform Administrator.</p>
+            <div className="mt-7 space-y-4">
+              <div><p className="text-sm font-medium">Display name</p><p className="mt-1 text-zinc-700">{session.businessName}</p></div>
+              <div><p className="text-sm font-medium">Signed in as</p><p className="mt-1 text-zinc-700">{session.email} · {session.role}</p></div>
+              <p className="rounded-xl bg-[#f5f3ef] px-4 py-3 text-xs leading-6 text-zinc-500">To change business account details, contact your BeanBook platform administrator.</p>
+            </div>
           </div>}
           {section!=='overview' && section!=='settings' && <div className="rounded-3xl border border-dashed border-[#d5d7d0] bg-white p-10 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eff4ee] text-2xl">{current.icon}</div><h3 className="mt-5 text-xl font-semibold">{current.name} is coming in Step {current.step}</h3><p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-500">This is the shared navigation shell. The module will be built, tested, and enabled in its scheduled step. No dummy orders or fictional sales are displayed.</p></div>}
         </main>
