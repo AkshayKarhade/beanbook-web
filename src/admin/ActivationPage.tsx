@@ -70,6 +70,16 @@ export default function ActivationPage() {
     try {
       const { error: updateError } = await adminSupabase.auth.updateUser({ password });
       if (updateError) throw updateError;
+      const { data: auth } = await adminSupabase.auth.getSession();
+      if (!auth.session?.access_token) throw new Error('Password saved, but the session expired. Sign in with your new password to finish onboarding.');
+      const checkpoint = await fetch('/api/business-onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + auth.session.access_token },
+        body: JSON.stringify({ action: 'credentials-set' }),
+      });
+      if (!checkpoint.ok) {
+        throw new Error('Password saved, but the activation checkpoint could not be recorded. Sign in with your new password and contact BeanBook support.');
+      }
       setPassword('');
       setConfirmPassword('');
       navigate('/admin', { replace: true });
