@@ -4,16 +4,20 @@ import Home from './pages/Home';
 import OrderPage from './pages/OrderPage';
 import AdminPage from './pages/AdminPage';
 import PlatformAdminPage from './admin/PlatformAdminPage';
+import ActivationPage from './admin/ActivationPage';
 import CragExpressPage from './pages/CragExpressPage';
 
 function App() {
   const isCragExpress = useMatch('/order/crag-fridge');
   const isAdmin = useMatch('/admin/*') || useMatch('/admin');
   const isPlatform = useMatch('/platform/*') || useMatch('/platform');
+  const isActivate = useMatch('/activate');
 
   if (isCragExpress) {
     return <main className="min-h-screen px-4 py-6"><CragExpressPage /></main>;
   }
+
+  if (isActivate) return <ActivationPage />;
 
   if (isPlatform) {
     return <PlatformAdminPage />;
