@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { supabaseAdmin } from '../lib/supabase-server';
+import { beanbookPublicSupabaseUrl, beanbookPublicSupabaseKey } from '../src/admin/publicConfig';
 
 type Payload = Record<string, unknown>;
 const json = (value: unknown, status = 200) =>
@@ -56,8 +57,8 @@ export default {
           .eq('is_active', true)
           .maybeSingle();
         if (error || !account) return json({ error: 'Invalid credentials' }, 401);
-        const url = process.env.SUPABASE_URL;
-        const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+        const url = process.env.SUPABASE_URL || beanbookPublicSupabaseUrl;
+        const key = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || beanbookPublicSupabaseKey;
         if (!url || !key) return json({ error: 'Authentication is not configured' }, 503);
         // Supabase Auth checks password, hashing, account status and auth rate limits.
         const signInClient = createClient(url, key, {
