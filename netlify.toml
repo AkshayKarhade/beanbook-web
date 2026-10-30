@@ -51,6 +51,12 @@
   status = 200
 
 [[redirects]]
+  from = "/api/business-onboarding"
+  to = "/.netlify/functions/business-onboarding"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/platform-admin"
   to = "/.netlify/functions/platform-admin"
   status = 200
