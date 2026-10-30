@@ -1,11 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { adminSupabase as supabase } from './client';
 type Business={id:string;name:string;created_at:string};
 type Invite={id:string;brand_id:string;email:string;status:string;created_at:string};
 type State={businesses:Business[];invitations:Invite[];settings:{sender_name?:string;sender_email?:string;reply_to_email?:string}};
-const authUrl=import.meta.env.VITE_SUPABASE_URL;
-const authKey=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-const supabase=authUrl&&authKey?createClient(authUrl,authKey):null;
 export default function PlatformAdminPage(){
   const [username,setUsername]=useState('admin'),[password,setPassword]=useState('');
   const [token,setToken]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
