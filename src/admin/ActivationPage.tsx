@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { adminSupabase } from './client';
+import { BUSINESS_ADMIN_ROLE_LABEL, BUSINESS_ADMIN_PRIVILEGES, BUSINESS_ADMIN_SCOPE_NOTE } from './businessAdminAccess';
 
-type Account = { email: string; business: string };
+type Account = { email: string; business: string; role: 'owner' };
 
 export default function ActivationPage() {
   const navigate = useNavigate();
@@ -31,11 +32,11 @@ export default function ActivationPage() {
         // Never accept a brand ID or role from URL parameters or user metadata.
         const { data: membership, error: membershipError } = await adminSupabase
           .from('admin_users')
-          .select('brand_id')
+          .select('brand_id, role')
           .eq('supabase_user_id', auth.user.id)
           .maybeSingle();
         if (membershipError) throw membershipError;
-        if (!membership) throw new Error('Your invitation has not been associated with a business.');
+        if (!membership || membership.role !== 'owner') throw new Error('This activation link is not associated with a Business Admin invitation.');
 
         const { data: brand, error: brandError } = await adminSupabase
           .from('brands')
@@ -43,7 +44,7 @@ export default function ActivationPage() {
           .eq('id', membership.brand_id)
           .single();
         if (brandError) throw brandError;
-        if (active) { setAccount({ email: auth.user.email || '', business: brand.name }); setError(''); setLoading(false); }
+        if (active) { setAccount({ email: auth.user.email || '', business: brand.name, role: 'owner' }); setError(''); setLoading(false); }
       } catch (err) {
         if (active) {
           setError(err instanceof Error ? err.message : 'Could not validate the invitation.');
@@ -93,8 +94,11 @@ export default function ActivationPage() {
           <Link className="mt-6 inline-block text-sm font-semibold text-emerald-800 underline" to="/admin">Back to business login</Link>
         </> : <>
           <p className="text-xs font-semibold uppercase tracking-widest text-[#688170]">Invitation verified</p>
-          <h1 className="mt-3 text-2xl font-semibold">Welcome to {account.business}</h1>
+          <h1 className="mt-3 text-2xl font-semibold">Activate your Business Admin account</h1>
+          <p className="mt-2 text-lg font-semibold">{account.business}</p>
+          <p className="mt-1 text-sm font-medium text-emerald-800">Role: {BUSINESS_ADMIN_ROLE_LABEL}</p>
           <p className="mt-2 text-sm leading-6 text-zinc-500">Activate your BeanBook business account for {account.email} by choosing your own password.</p>
+          <section aria-label="Business Admin privileges" className="mt-5 rounded-xl border border-zinc-200 bg-[#f5f3ef] p-4"><h2 className="font-semibold">Your business privileges</h2><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-700">{BUSINESS_ADMIN_PRIVILEGES.map(privilege=><li key={privilege}>{privilege}</li>)}</ul><p className="mt-3 text-xs leading-5 text-zinc-600">{BUSINESS_ADMIN_SCOPE_NOTE}</p></section>
           <form className="mt-6 space-y-4" onSubmit={activate}>
             <div><label htmlFor="activate-password" className="mb-2 block text-sm font-medium">Create password</label>
             <input id="activate-password" type="password" autoComplete="new-password" minLength={12} maxLength={200} required value={password} onChange={e=>setPassword(e.target.value)} className="w-full rounded-xl border border-zinc-200 px-4 py-3" /></div>
