@@ -25,8 +25,10 @@ async function platformUser(request: Request, supabaseAdmin: SupabaseClient) {
   return user.user.id;
 }
 
-export default {
-  async fetch(request: Request) {
+// Netlify Functions require a callable default export; explicit path avoids rewrite ambiguity.
+export const config = { path: '/api/platform-admin' };
+
+export default async function platformAdmin(request: Request) {
     // Avoid a module-load crash if the preview Function lacks runtime credentials.
     if (request.method === 'GET') {
       const ready = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
@@ -208,5 +210,4 @@ export default {
       console.error('Platform administration request failed:', error);
       return json({ error: 'Platform operation failed. Review server logs.' }, 500);
     }
-  },
-};
+}
