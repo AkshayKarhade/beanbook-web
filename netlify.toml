@@ -55,3 +55,12 @@
   to = "/.netlify/functions/platform-admin"
   status = 200
   force = true
+
+# The Supabase project URL is intended to be public, unlike SUPABASE_SECRET_KEY.
+# Expose it to Vite only for Deploy Previews, without storing its value in git.
+[context.deploy-preview]
+  command = 'VITE_SUPABASE_URL="$SUPABASE_URL" npm run build'
+
+# Netlify must still scan real secrets; exempt only this intentionally public URL.
+[context.deploy-preview.environment]
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL"
