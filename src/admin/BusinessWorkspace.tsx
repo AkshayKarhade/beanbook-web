@@ -25,8 +25,8 @@ export default function BusinessWorkspace() {
         <div className="mx-auto max-w-lg rounded-3xl border border-amber-200 bg-white p-9 shadow-sm">
           <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">Preview setup required</span>
           <h1 className="mt-3 text-3xl font-semibold">Connect a test workspace</h1>
-          <p className="mt-4 leading-7 text-zinc-600">This preview is deliberately disconnected from live customer and payment data. Configure VITE_BEANBOOK_ADMIN_SUPABASE_URL and VITE_BEANBOOK_ADMIN_SUPABASE_PUBLISHABLE_KEY for a separate test project, then apply the Step 1 migration.</p>
-          <p className="mt-4 text-sm text-zinc-500">No demo passwords or production fallback are embedded in the application.</p>
+          <p className="mt-4 leading-7 text-zinc-600">The admin configuration is missing. Connect this preview to your authorized Supabase project using the existing VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY environment variables. Business access is controlled by authenticated membership and database policies.</p>
+          <p className="mt-4 text-sm text-zinc-500">No demo credentials are embedded in this application.</p>
           <Link to="/" className="mt-6 inline-block text-sm font-semibold text-emerald-800 underline">Return to BeanBook</Link>
         </div>
       </div>
