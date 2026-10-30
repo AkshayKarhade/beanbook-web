@@ -12,8 +12,14 @@ export default function PlatformAdminPage(){
 
   async function request(action:string, extra:Record<string,unknown>={}, sessionToken=token) {
     const response=await fetch('/api/platform-admin',{method:'POST',headers:{'Content-Type':'application/json',...(sessionToken?{'Authorization':'Bearer '+sessionToken}:{})},body:JSON.stringify({action,...extra})});
-    const result=await response.json();
-    if(!response.ok)throw new Error(result.error||'Operation failed');
+    const raw=await response.text();
+    const mime=response.headers.get('content-type')||'';
+    if(!raw.trim())throw new Error('Platform API returned an empty response (HTTP '+response.status+').');
+    if(!mime.includes('application/json'))throw new Error('Platform API returned a non-JSON response (HTTP '+response.status+'). Check the Netlify Function route.');
+    let result: Record<string, unknown>;
+    try { result=JSON.parse(raw) as Record<string, unknown>; }
+    catch { throw new Error('Platform API returned invalid JSON (HTTP '+response.status+').'); }
+    if(!response.ok)throw new Error(typeof result.error==='string'?result.error:'Platform API failed (HTTP '+response.status+').');
     return result;
   }
   async function refresh(t=token){
