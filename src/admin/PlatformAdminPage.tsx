@@ -28,7 +28,7 @@ export default function PlatformAdminPage(){
     void supabase.auth.getSession().then(async ({data:auth})=>{
       if(auth.session?.access_token){
         try{await refresh(auth.session.access_token);setToken(auth.session.access_token);}
-        catch{await supabase.auth.signOut();}
+        catch{await supabase?.auth.signOut();}
       }
     });
   // Only run on mount; token refresh is handled by the Supabase client.
