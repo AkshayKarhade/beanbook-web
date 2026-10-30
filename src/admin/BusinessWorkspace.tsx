@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { adminBackendConfigured } from './client';
+import { adminBackendConfigured, adminSupabase } from './client';
 import LoginPanel from './LoginPanel';
 import { useBusinessSession } from './useBusinessSession';
 
@@ -18,6 +18,37 @@ const nav: { id: Section; name: string; icon: string; step: number }[] = [
 export default function BusinessWorkspace() {
   const { loading, error, session, signOut } = useBusinessSession();
   const [section, setSection] = useState<Section>('overview');
+  const [onboardingStatus, setOnboardingStatus] = useState('');
+  const [onboardingError, setOnboardingError] = useState('');
+  const [checkingOnboarding, setCheckingOnboarding] = useState(false);
+
+  async function finishOnboarding() {
+    if (!adminSupabase || !session || session.role !== 'owner') return;
+    setCheckingOnboarding(true);
+    setOnboardingError('');
+    try {
+      const { data: auth } = await adminSupabase.auth.getSession();
+      if (!auth.session?.access_token) return;
+      const response = await fetch('/api/business-onboarding', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + auth.session.access_token },
+        body: JSON.stringify({ action: 'complete' }),
+      });
+      const result = await response.json() as { status?: string; error?: string };
+      if (!response.ok) throw new Error(result.error || 'The welcome email is pending.');
+      setOnboardingStatus(result.status || '');
+    } catch (err) {
+      setOnboardingError(err instanceof Error ? err.message : 'Welcome email is pending; retry when ready.');
+    } finally {
+      setCheckingOnboarding(false);
+    }
+  }
+
+  useEffect(() => {
+    if (session?.role === 'owner') void finishOnboarding();
+  // Trigger only when the verified owner session is loaded.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.userId, session?.brandId]);
 
   if (!adminBackendConfigured) {
     return (
@@ -69,6 +100,8 @@ export default function BusinessWorkspace() {
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-5 py-8 sm:px-9 sm:py-10">
+          {onboardingStatus === 'completed' && <div role="status" className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">🎉 Welcome aboard! Your Business Admin account is active and your welcome email has been sent.</div>}
+          {onboardingError && <div role="alert" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{onboardingError} <button type="button" disabled={checkingOnboarding} className="ml-2 font-semibold underline" onClick={()=>void finishOnboarding()}>Retry welcome email</button></div>}
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
             <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6b8974]">BeanBook / {current.name}</p><h2 className="mt-2 text-3xl font-semibold tracking-tight">{current.name}</h2></div>
             <span className="rounded-full border border-[#cdded1] bg-[#eaf3ec] px-3 py-1.5 text-xs font-medium text-[#426d4c]">Foundation Preview · Step 1 of 5</span>
