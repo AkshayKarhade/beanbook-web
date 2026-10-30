@@ -153,7 +153,7 @@ export default async function platformAdmin(request: Request) {
         if (!sender?.sender_email || !sender?.sender_name) return json({ error: 'Configure your sender address first.' }, 409);
 
         const { data: existingInvite, error: existingError } = await supabaseAdmin
-          .from('business_invitations').select('id').eq('brand_id', brandId)
+          .from('business_invitations').select('id,auth_user_id,status').eq('brand_id', brandId)
           .eq('email', email).maybeSingle();
         if (existingError) throw existingError;
         // Avoid creating a second account for an already registered email.
@@ -162,14 +162,20 @@ export default async function platformAdmin(request: Request) {
           : await supabaseAdmin.from('business_invitations').insert({ brand_id: brandId, email, status: 'pending', created_by: userId }).select('id').single();
         if (inviteError) throw inviteError;
 
+        // A previous failed send may already have created an unconfirmed
+        // Supabase Auth user. Reissue a link for that account, never a duplicate.
+        const linkType = existingInvite?.auth_user_id ? 'recovery' : 'invite';
         const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-          type: 'invite',
+          type: linkType,
           email,
           options: { redirectTo: redirectBase },
         });
         if (linkError || !linkData?.user?.id || !linkData.properties?.action_link) {
           await supabaseAdmin.from('business_invitations').update({ status: 'failed', error_message: 'Could not generate invitation link.' }).eq('id', invitation.id);
           return json({ error: 'Unable to generate an invitation for this address. Check whether this user already exists.' }, 409);
+        }
+        if (existingInvite?.auth_user_id && linkData.user.id !== existingInvite.auth_user_id) {
+          return json({ error: 'Invitation account does not match the existing user. Manual review required.' }, 409);
         }
         const { data: membership, error: membershipError } = await supabaseAdmin.from('admin_users')
           .select('brand_id').eq('supabase_user_id', linkData.user.id).maybeSingle();
