@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { beanbookPublicSupabaseKey } from '../src/admin/publicConfig';
+import { BUSINESS_ADMIN_ROLE_LABEL, BUSINESS_ADMIN_PRIVILEGES, BUSINESS_ADMIN_SCOPE_NOTE } from '../src/admin/businessAdminAccess';
 
 type Payload = Record<string, unknown>;
 const json = (value: unknown, status = 200) =>
@@ -188,10 +189,18 @@ export default async function platformAdmin(request: Request) {
             from: sender.sender_name + ' <' + sender.sender_email + '>',
             to: [email],
             ...(sender.reply_to_email ? { reply_to: sender.reply_to_email } : {}),
-            subject: 'Your BeanBook business invitation',
-            html: '<p>You have been invited to manage <strong>' + safeText(business.name) + '</strong> using BeanBook.</p>' +
-              '<p><a href="' + safeText(linkData.properties.action_link) + '">Accept your invitation</a></p>' +
-              '<p>This is an invitation to your business workspace. If unexpected, you can ignore this email.</p>',
+            subject: 'Your Business Admin invitation — ' + business.name,
+            html: '<div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#1b2822">' +
+              '<p style="color:#087f60;letter-spacing:2px;font-weight:700">BEANBOOK</p>' +
+              '<h1>You are invited to become Business Admin</h1>' +
+              '<p><strong>Business:</strong> ' + safeText(business.name) + '</p>' +
+              '<p><strong>Assigned role:</strong> ' + safeText(BUSINESS_ADMIN_ROLE_LABEL) + '</p>' +
+              '<p>Your business already has a BeanBook account. This invitation establishes your access as its Business Admin.</p>' +
+              '<h2 style="font-size:18px">Your privileges</h2><ul>' +
+              BUSINESS_ADMIN_PRIVILEGES.map(item => '<li style="margin-bottom:8px">' + safeText(item) + '</li>').join('') +
+              '</ul><p style="font-size:13px;color:#52635a">' + safeText(BUSINESS_ADMIN_SCOPE_NOTE) + '</p>' +
+              '<p><a style="display:inline-block;padding:14px 20px;background:#1b2822;color:white;text-decoration:none;border-radius:8px" href="' + safeText(linkData.properties.action_link) + '">Activate Business Admin access</a></p>' +
+              '<p style="font-size:12px;color:#52635a">If you were not expecting this invitation, you may ignore it.</p></div>',
           }),
         });
         if (!message.ok) {
