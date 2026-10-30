@@ -49,3 +49,9 @@
   from = "/beanbook/*"
   to = "/beanbook/index.html"
   status = 200
+
+[[redirects]]
+  from = "/api/platform-admin"
+  to = "/.netlify/functions/platform-admin"
+  status = 200
+  force = true
