@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { supabaseAdmin } from '../lib/supabase-server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { beanbookPublicSupabaseKey } from '../src/admin/publicConfig';
 
 type Payload = Record<string, unknown>;
@@ -9,7 +9,7 @@ const clean = (input: unknown) => typeof input === 'string' ? input.trim() : '';
 const validEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
 const safeText = (text: string) => text.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c] || c);
 
-async function platformUser(request: Request) {
+async function platformUser(request: Request, supabaseAdmin: SupabaseClient) {
   const bearer = request.headers.get('authorization')?.match(/^Bearer (.+)$/i)?.[1];
   if (!bearer) return null;
   const { data: user, error } = await supabaseAdmin.auth.getUser(bearer);
@@ -27,7 +27,18 @@ async function platformUser(request: Request) {
 
 export default {
   async fetch(request: Request) {
+    // Avoid a module-load crash if the preview Function lacks runtime credentials.
+    if (request.method === 'GET') {
+      const ready = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SECRET_KEY);
+      return json({ service: 'platform-admin', ready }, ready ? 200 : 503);
+    }
     if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY) {
+      return json({ error: 'Netlify Function environment is missing Supabase runtime credentials.' }, 503);
+    }
+    const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
     const origin = request.headers.get('origin');
     if (origin && origin !== new URL(request.url).origin) {
       return json({ error: 'Cross-origin request blocked.' }, 403);
@@ -76,7 +87,7 @@ export default {
         });
       }
 
-      const userId = await platformUser(request);
+      const userId = await platformUser(request, supabaseAdmin);
       if (!userId) return json({ error: 'Platform administrator access required.' }, 403);
 
       if (action === 'summary') {
