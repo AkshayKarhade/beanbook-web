@@ -3,14 +3,20 @@ import { Link, Route, Routes, useMatch } from 'react-router-dom';
 import Home from './pages/Home';
 import OrderPage from './pages/OrderPage';
 import AdminPage from './pages/AdminPage';
+import PlatformAdminPage from './admin/PlatformAdminPage';
 import CragExpressPage from './pages/CragExpressPage';
 
 function App() {
   const isCragExpress = useMatch('/order/crag-fridge');
   const isAdmin = useMatch('/admin/*') || useMatch('/admin');
+  const isPlatform = useMatch('/platform/*') || useMatch('/platform');
 
   if (isCragExpress) {
     return <main className="min-h-screen px-4 py-6"><CragExpressPage /></main>;
+  }
+
+  if (isPlatform) {
+    return <PlatformAdminPage />;
   }
 
   if (isAdmin) {
@@ -34,6 +40,7 @@ function App() {
           <Route path="/order/crag-fridge" element={<CragExpressPage />} />
           <Route path="/order/:eventSlug" element={<OrderPage />} />
           <Route path="/admin/*" element={<AdminPage />} />
+          <Route path="/platform/*" element={<PlatformAdminPage />} />
         </Routes>
       </main>
     </div>
