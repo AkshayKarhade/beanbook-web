@@ -1,10 +1,8 @@
 import {useEffect,useState} from 'react';
-import {useParams} from 'react-router-dom';
 type Product={id:string;name:string;description:string|null;price:number|null;sizes:{name:string;price:number}[];images:string[]};
 type MenuData={business:string;menu:{name:string;location:string|null;sales_mode:string;start:string|null;end:string|null};products:Product[]};
 const money=(n:number)=>'₹'+Number(n).toLocaleString('en-IN',{maximumFractionDigits:2});
-export default function PublicSalesMenu(){
- const {menuId}=useParams();
+export default function PublicSalesMenu({menuId}:{menuId:string}){
  const [data,setData]=useState<MenuData|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true);
  useEffect(()=>{const ctrl=new AbortController();setLoading(true);setError('');
   void fetch('/api/business-products?mode=public-menu&id='+encodeURIComponent(menuId||''),{signal:ctrl.signal})
