@@ -12,7 +12,7 @@ const btn='rounded-xl border border-zinc-300 px-4 py-2 text-sm disabled:opacity-
 const primary='rounded-xl bg-[#1b2822] px-4 py-3 font-semibold text-white disabled:opacity-50';
 const cash=(n:number)=>'₹'+Number(n).toLocaleString('en-IN',{maximumFractionDigits:2});
 const empty:Data={sizes:[],addons:[],prices:[],links:[]};
-export default function ProductOptions({products}:{products:Product[]}){
+export default function ProductOptions({products,onChanged}:{products:Product[];onChanged:()=>void}){
  const [data,setData]=useState<Data>(empty),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [mode,setMode]=useState<'none'|'addon'|'sizes'>('none');
  const [productId,setProductId]=useState('');
@@ -33,7 +33,7 @@ export default function ProductOptions({products}:{products:Product[]}){
  useEffect(()=>{void reload().catch(e=>setError(String(e)));},[reload]);
  async function act(payload:Record<string,unknown>,message:string){
   setBusy(true);setError('');setNotice('');
-  try{await request(payload);await reload();setNotice(message);return true;}
+  try{await request(payload);await reload();onChanged();setNotice(message);return true;}
   catch(e){setError(e instanceof Error?e.message:'Could not save');return false;}
   finally{setBusy(false);}
  }
@@ -70,10 +70,10 @@ export default function ProductOptions({products}:{products:Product[]}){
   if(await act({action:'saveAddon',...(addonId?{addonId}:{}),name:addonName,description:addonDescription,prices:valid.map(r=>({size_name:r.name,price:Number(r.price)}))},'Add-on saved.'))setMode('none');
  }
  return <section className="mt-8 space-y-5">
-  <div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="text-xl font-semibold">Drink sizes & add-ons</h3><p className="mt-1 text-sm text-zinc-500">Set a price for each drink size, then create reusable add-ons priced by size.</p></div><button type="button" className={primary} onClick={()=>editAddon()}>+ New Add-On</button></div>
+  <div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="text-xl font-semibold">Add-on library</h3><p className="mt-1 text-sm text-zinc-500">Create reusable add-ons and set their price for each drink size.</p></div><button type="button" className={primary} onClick={()=>editAddon()}>+ New Add-On</button></div>
   {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</p>}
   {notice&&<p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">{notice}</p>}
-  {mode==='sizes'&&<form className="space-y-4 rounded-2xl border bg-white p-5" onSubmit={e=>void saveSizes(e)}><h4 className="text-lg font-semibold">Sizes for {products.find(p=>p.id===productId)?.name}</h4>
+  {false && mode==='sizes'&&<form className="space-y-4 rounded-2xl border bg-white p-5" onSubmit={e=>void saveSizes(e)}><h4 className="text-lg font-semibold">Sizes for {products.find(p=>p.id===productId)?.name}</h4>
    <p className="text-sm text-zinc-500">A drink can have its own Small, Medium or Large prices. Size names must match those configured on add-ons.</p>
    {rowsEditor(sizeRows,setSizeRows)}
    <div className="flex gap-2"><button className={primary} disabled={busy}>Save sizes</button><button type="button" className={btn} onClick={()=>setMode('none')}>Cancel</button></div>
@@ -85,7 +85,7 @@ export default function ProductOptions({products}:{products:Product[]}){
    <div className="flex gap-2"><button className={primary} disabled={busy}>Save add-on</button><button type="button" className={btn} onClick={()=>setMode('none')}>Cancel</button></div>
   </form>}
   <div className="space-y-3">{products.map(p=><div key={p.id} className="rounded-xl border border-zinc-200 bg-white p-4">
-   <div className="flex flex-wrap items-center justify-between gap-3"><strong>{p.name}</strong><button type="button" className={btn} onClick={()=>editSizes(p)}>Configure sizes</button></div>
+   <div className="flex flex-wrap items-center justify-between gap-3"><strong>{p.name}</strong><span className="text-xs text-zinc-500">Edit product to change sizes</span></div>
    <div className="mt-2 text-sm text-zinc-600">{data.sizes.filter(s=>s.product_id===p.id).map(s=>s.name+' '+cash(s.price)).join(' · ')||'Standard price '+cash(p.price)}</div>
    <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Available add-ons for this product</p>
    <div className="mt-2 flex flex-wrap gap-3">{data.addons.filter(a=>a.is_active).map(a=>{
