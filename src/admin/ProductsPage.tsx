@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { adminSupabase } from './client';
 import ProductOptions from './ProductOptions';
+import ProductImages, {type ProductImagesHandle} from './ProductImages';
 
 type Product = { id: string; name: string; description: string | null; price: number; is_active: boolean; created_at: string };
 type FormValues = { name: string; description: string; price: string };
@@ -13,6 +14,7 @@ const primary = 'rounded-xl bg-[#1b2822] px-5 py-3 text-sm font-semibold text-wh
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const imagesRef = useRef<ProductImagesHandle>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pendingProductId, setPendingProductId] = useState<string | null>(null);
@@ -104,9 +106,13 @@ export default function ProductsPage() {
     }
     setSaving(true);
     try {
-      await request({action:'saveCatalog',...(editingId?{productId:editingId}:{}),
+      const saved = await request({action:'saveCatalog',...(editingId?{productId:editingId}:{}),
         name:form.name,description:form.description,price,
         sizes:sizes.map(r=>({name:r.name.trim(),price:Number(r.price)})),addonIds});
+      const savedId = (saved as {productId?:string}).productId;
+      if (!savedId) throw new Error('Product saved but the image upload could not start.');
+      try { await imagesRef.current?.uploadQueued(savedId); }
+      catch { await refresh(); throw new Error('Product saved, but at least one image could not upload. Edit the product to retry.'); }
       await Promise.all([refresh(),refreshOptions()]);
       setShowForm(false);setEditingId(null);setForm(empty);
       setNotice(editingId?'Product and options updated.':'Product and options added.');
@@ -176,7 +182,8 @@ export default function ProductsPage() {
         {optionsError?<p className="text-sm text-red-600">{optionsError}</p>:options.addons.filter(a=>a.is_active).length===0?<p className="text-sm text-zinc-500">No add-ons created yet.</p>:
         <div className="flex flex-wrap gap-4">{options.addons.filter(a=>a.is_active).map(a=><label key={a.id} className="flex gap-2 text-sm items-center"><input type="checkbox" checked={addonIds.includes(a.id)} onChange={e=>setAddonIds(v=>e.target.checked?[...v,a.id]:v.filter(x=>x!==a.id))}/>{a.name}</label>)}</div>}
       </div>
-      <button className={primary} disabled={saving || pendingProductId !== null}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save product'}</button>
+      <ProductImages key={editingId || 'new'} productId={editingId} apiRef={imagesRef} />
+      <button className={primary} disabled={saving || pendingProductId !== null}>{saving ? 'Saving product and photos…' : editingId ? 'Save changes' : 'Save product'}</button>
     </form>}
     {loading ? <p className="py-8 text-sm text-zinc-500">Loading products…</p> :
       products.length === 0 ? <div className="rounded-2xl border border-dashed border-[#d5d7d0] bg-white p-8 text-center">
