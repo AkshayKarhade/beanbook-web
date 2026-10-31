@@ -27,8 +27,12 @@ export default function ProductsPage() {
       headers: { Authorization: 'Bearer ' + data.session.access_token, ...(payload ? { 'Content-Type': 'application/json' } : {}) },
       ...(payload ? { body: JSON.stringify(payload) } : {}),
     });
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      throw new Error('Product service is unavailable (HTTP ' + response.status + '). Please check the Netlify preview deployment.');
+    }
     const result = await response.json() as { products?: Product[]; error?: string };
-    if (!response.ok) throw new Error(result.error || 'Could not complete the request.');
+    if (!response.ok) throw new Error(result.error || 'Could not complete the request (HTTP ' + response.status + ').');
     return result;
   }, []);
 
