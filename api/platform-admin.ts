@@ -26,8 +26,7 @@ async function platformUser(request: Request, supabaseAdmin: SupabaseClient) {
   return user.user.id;
 }
 
-// Netlify Functions require a callable default export; explicit path avoids rewrite ambiguity.
-export const config = { path: '/api/platform-admin' };
+// Netlify exposes this default-export function at its standard function URL.
 
 export default async function platformAdmin(request: Request) {
     // Avoid a module-load crash if the preview Function lacks runtime credentials.

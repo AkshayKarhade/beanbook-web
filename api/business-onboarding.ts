@@ -6,7 +6,6 @@ const json = (data: unknown, status = 200) =>
 const safe = (input: string) =>
   input.replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[ch] || ch);
 
-export const config = { path: '/api/business-onboarding' };
 
 export default async function businessOnboarding(request: Request) {
   if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405);

@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-export const config = { path: '/api/business-products' };
 
 const json = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
