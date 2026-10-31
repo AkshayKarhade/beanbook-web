@@ -84,6 +84,37 @@ export default async function businessProducts(request: Request) {
       return json({ error: 'Invalid JSON body.' }, 400);
     }
 
+    if (body.action === 'saveCatalog') {
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      const description = typeof body.description === 'string' ? body.description.trim() : '';
+      const sizes = body.sizes;
+      const addonIds = body.addonIds;
+      const editingId = body.productId;
+      const validUuid = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(v);
+      if (name.length < 2 || name.length > 120 || description.length > 500 ||
+        !Array.isArray(sizes) || sizes.length > 12 || !Array.isArray(addonIds) ||
+        addonIds.length > 50 || addonIds.some(v => !validUuid(v)) ||
+        (editingId != null && !validUuid(editingId))) {
+        return json({ error: 'Invalid product configuration.' }, 400);
+      }
+      const numeric = Number(body.price);
+      if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 100000 ||
+          Math.abs(numeric * 100 - Math.round(numeric * 100)) > 0.00001) {
+        return json({ error: 'Invalid product price.' }, 400);
+      }
+      const { data: saved, error: saveError } = await admin.rpc('beanbook_save_product_catalog', {
+        p_brand_id: brandId, p_product_id: editingId || null,
+        p_name: name, p_description: description, p_price: numeric,
+        p_sizes: sizes, p_addon_ids: addonIds,
+      });
+      if (saveError) {
+        if (saveError.code === '22023' || saveError.code === 'P0002')
+          return json({ error: saveError.message }, 400);
+        throw saveError;
+      }
+      return json({ ok: true, productId: saved });
+    }
+
     if (body.action === 'create') {
       const fields = parseProduct(body);
       if (!fields) return json({ error: 'Enter a name (2–120 characters), price above ₹0 (up to ₹1,00,000) and optional description (up to 500 characters).' }, 400);
