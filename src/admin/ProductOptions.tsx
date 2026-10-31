@@ -23,7 +23,7 @@ export default function ProductOptions({products}:{products:Product[]}){
  const request=useCallback(async(payload?:Record<string,unknown>)=>{
   const {data:session}=await adminSupabase!.auth.getSession();
   if(!session.session?.access_token)throw new Error('Session expired. Sign in again.');
-  const res=await fetch('/api/business-options',{method:payload?'POST':'GET',headers:{Authorization:'Bearer '+session.session.access_token,...(payload?{'Content-Type':'application/json'}:{})},...(payload?{body:JSON.stringify(payload)}:{})});
+  const res=await fetch('/api/business-products?mode=options',{method:payload?'POST':'GET',headers:{Authorization:'Bearer '+session.session.access_token,...(payload?{'Content-Type':'application/json'}:{})},...(payload?{body:JSON.stringify(payload)}:{})});
   if(!(res.headers.get('content-type')||'').includes('application/json'))throw new Error('Configuration service unavailable (HTTP '+res.status+')');
   const body=await res.json();
   if(!res.ok)throw new Error(body.error||'Configuration request failed');
