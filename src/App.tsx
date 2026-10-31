@@ -15,7 +15,7 @@ function App() {
   const isPlatform = useMatch('/platform/*') || useMatch('/platform');
   const isActivate = useMatch('/activate');
 
-  if (isPublishedMenu) return <PublicSalesMenu />;
+  if (isPublishedMenu) return <PublicSalesMenu menuId={isPublishedMenu.params.menuId!} />;
 
   if (isCragExpress) {
     return <main className="min-h-screen px-4 py-6"><CragExpressPage /></main>;
