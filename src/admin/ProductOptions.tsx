@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {adminSupabase} from './client';
 type Product={id:string;name:string;price:number};
+type Size={id:string;product_id:string;name:string;price:number;display_order:number};
 type Addon={id:string;name:string;description:string|null;is_active:boolean};
 type Price={addon_id:string;size_name:string;price:number};
 type Link={product_id:string;addon_id:string};
