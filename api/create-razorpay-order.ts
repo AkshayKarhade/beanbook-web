@@ -100,6 +100,8 @@ export default {
         .from('events')
         .select('id, brand_id, slug')
         .eq('slug', eventSlug.trim())
+        // Pilot businesses must not collect payments through The 8th Coffee Bean's Razorpay account.
+        .eq('brand_id', '00000000-0000-0000-0000-000000000001')
         .eq('status', 'active')
         .maybeSingle();
 
