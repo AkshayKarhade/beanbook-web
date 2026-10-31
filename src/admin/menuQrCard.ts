@@ -1,15 +1,21 @@
 // White-label printable menu QR card. Render from verified published menu data.
-// The image includes the canonical production URL (never a temporary Netlify preview URL).
+// Production cards use the permanent URL. Preview cards use a temporary preview URL and are visibly marked TEST ONLY.
 export type MenuQrCardData = {
   businessName: string;
   menuName: string;
   menuType: 'regular' | 'event';
   location: string | null;
   url: string;
+  preview: boolean;
 };
 
-export const menuPublicUrl = (menuId: string) =>
-  'https://the8thcoffeebean.com/beanbook/menu/' + encodeURIComponent(menuId);
+export const isMenuPreview = () =>
+  !['the8thcoffeebean.com', 'www.the8thcoffeebean.com'].includes(window.location.hostname);
+
+export const menuPublicUrl = (menuId: string) => {
+  const origin = isMenuPreview() ? window.location.origin : 'https://the8thcoffeebean.com';
+  return origin + '/beanbook/menu/' + encodeURIComponent(menuId);
+};
 
 const slug = (value: string) =>
   value.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'menu';
@@ -74,8 +80,14 @@ export async function downloadMenuQrCard(data: MenuQrCardData, qrCanvas: HTMLCan
   roundedRect(ctx, 75, 65, 1050, 1470, 36);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
+  if (data.preview) {
+    roundedRect(ctx, 348, 96, 504, 55, 12);
+    ctx.fillStyle = '#fef3c7';
+    ctx.fill();
+    fittedText(ctx, 'TEST ONLY · PREVIEW QR', 124, 460, 29, 800, '#92400e');
+  }
   ctx.fillStyle = '#1b2822';
-  roundedRect(ctx, 520, 132, 160, 9, 4);
+  roundedRect(ctx, 520, 165, 160, 9, 4);
   ctx.fill();
 
   fittedText(ctx, data.businessName, 240, 920, 73, 750, '#1b2822');
@@ -103,7 +115,7 @@ export async function downloadMenuQrCard(data: MenuQrCardData, qrCanvas: HTMLCan
   const downloadUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = downloadUrl;
-  link.download = slug(data.businessName) + '-' + slug(data.menuName) + '-qr.png';
+  link.download = slug(data.businessName) + '-' + slug(data.menuName) + (data.preview ? '-preview-qr.png' : '-qr.png');
   document.body.appendChild(link);
   link.click();
   link.remove();
