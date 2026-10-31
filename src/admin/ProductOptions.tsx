@@ -1,20 +1,17 @@
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {adminSupabase} from './client';
-type Product={id:string;name:string;price:number};
-type Size={id:string;product_id:string;name:string;price:number;display_order:number};
 type Addon={id:string;name:string;description:string|null;is_active:boolean};
 type Price={addon_id:string;size_name:string;price:number};
-type Link={product_id:string;addon_id:string};
-type Data={sizes:Size[];addons:Addon[];prices:Price[];links:Link[]};
+type Data={addons:Addon[];prices:Price[]};
 type Row={name:string;price:string};
 const input='w-full rounded-xl border border-zinc-300 bg-white p-3 text-zinc-900';
 const btn='rounded-xl border border-zinc-300 px-4 py-2 text-sm disabled:opacity-50';
 const primary='rounded-xl bg-[#1b2822] px-4 py-3 font-semibold text-white disabled:opacity-50';
 const cash=(n:number)=>'₹'+Number(n).toLocaleString('en-IN',{maximumFractionDigits:2});
-const empty:Data={sizes:[],addons:[],prices:[],links:[]};
-export default function ProductOptions({products,onChanged}:{products:Product[];onChanged:()=>void}){
+const empty:Data={addons:[],prices:[]};
+export default function ProductOptions({onChanged}:{onChanged:()=>void}){
  const [data,setData]=useState<Data>(empty),[busy,setBusy]=useState(false),[pendingAddonId,setPendingAddonId]=useState<string|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [mode,setMode]=useState<'none'|'addon'|'sizes'>('none');
+ const [mode,setMode]=useState<'none'|'addon'>('none');
  const [addonId,setAddonId]=useState('');
  const [addonName,setAddonName]=useState(''),[addonDescription,setAddonDescription]=useState('');
  const [standardPrice,setStandardPrice]=useState('');
@@ -91,8 +88,8 @@ export default function ProductOptions({products,onChanged}:{products:Product[];
   if(new Set(prices.map(p=>p.size_name.toLowerCase())).size!==prices.length){setError('Each size can have only one price, including Standard.');return;}
   if(await act({action:'saveAddon',...(addonId?{addonId}:{}),name:addonName,description:addonDescription,prices},'Add-on saved.'))setMode('none');
  }
- return <section className="mt-8 space-y-5">
-  <div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="text-xl font-semibold">Add-on library</h3><p className="mt-1 text-sm text-zinc-500">Create reusable add-ons and set their price for each drink size.</p></div><button type="button" className={primary} disabled={busy||pendingAddonId!==null} onClick={()=>editAddon()}>+ New Add-On</button></div>
+ return <section className="space-y-5">
+  <div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="text-xl font-semibold">Add-On Library</h3><p className="mt-1 text-sm text-zinc-500">Manage reusable extras, Standard prices, and size-specific prices. Assign extras from each product’s Edit form.</p></div><button type="button" className={primary} disabled={busy||pendingAddonId!==null} onClick={()=>editAddon()}>+ New Add-On</button></div>
   {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</p>}
   {notice&&<p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">{notice}</p>}
   {mode==='addon'&&<form className="space-y-4 rounded-2xl border bg-white p-5" onSubmit={e=>void saveAddon(e)}><h4 className="text-lg font-semibold">{addonId?'Edit add-on':'New add-on'}</h4>
@@ -107,16 +104,9 @@ export default function ProductOptions({products,onChanged}:{products:Product[];
    {rowsEditor(addonPrices,setAddonPrices)}
    <div className="flex gap-2"><button className={primary} disabled={busy||pendingAddonId!==null}>Save add-on</button><button type="button" className={btn} disabled={busy||pendingAddonId!==null} onClick={()=>setMode('none')}>Cancel</button></div>
   </form>}
-  <div className="space-y-3">{products.map(p=><div key={p.id} className="rounded-xl border border-zinc-200 bg-white p-4">
-   <div className="flex flex-wrap items-center justify-between gap-3"><strong>{p.name}</strong><span className="text-xs text-zinc-500">Edit product to change sizes</span></div>
-   <div className="mt-2 text-sm text-zinc-600">{data.sizes.filter(s=>s.product_id===p.id).map(s=>s.name+' '+cash(s.price)).join(' · ')||'Standard price '+cash(p.price)}</div>
-   <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-zinc-500">Available add-ons for this product</p>
-   <div className="mt-2 flex flex-wrap gap-3">{data.addons.filter(a=>a.is_active).map(a=>{
-    const checked=data.links.some(l=>l.product_id===p.id&&l.addon_id===a.id);
-    return <label key={a.id} className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={busy||pendingAddonId!==null} checked={checked} onChange={()=>void act({action:'setProductAddons',productId:p.id,addonIds:checked?data.links.filter(l=>l.product_id===p.id&&l.addon_id!==a.id).map(l=>l.addon_id):[...data.links.filter(l=>l.product_id===p.id).map(l=>l.addon_id),a.id]},'Product add-ons updated.')}/>{a.name}</label>;
-   })}</div>
-  </div>)}</div>
-  <div className="space-y-3"><h4 className="font-semibold">Add-on library</h4>
+  <div className="space-y-3">
+   {data.addons.length===0&&<div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-8 text-center"><h4 className="text-lg font-semibold">No add-ons yet</h4><p className="mt-2 text-sm text-zinc-500">Create Vanilla Syrup, Almond Milk or any other extra once and use it across products.</p><button type="button" disabled={busy||pendingAddonId!==null} className={primary+' mt-4'} onClick={()=>editAddon()}>+ Create your first add-on</button></div>}
+
    {data.addons.map(a=>
     <article key={a.id} aria-busy={pendingAddonId===a.id} className={'flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 shadow-sm transition-colors duration-200 '+(a.is_active?'border-zinc-200 bg-white':'border-2 border-dashed border-amber-400 border-l-[6px] border-l-amber-500 bg-amber-50')+(pendingAddonId===a.id?' ring-2 ring-amber-300':'')}>
      <div className="min-w-0 flex-1">
