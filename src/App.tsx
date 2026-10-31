@@ -6,12 +6,16 @@ import AdminPage from './pages/AdminPage';
 import PlatformAdminPage from './admin/PlatformAdminPage';
 import ActivationPage from './admin/ActivationPage';
 import CragExpressPage from './pages/CragExpressPage';
+import PublicSalesMenu from './pages/PublicSalesMenu';
 
 function App() {
   const isCragExpress = useMatch('/order/crag-fridge');
+  const isPublishedMenu = useMatch('/menu/:menuId');
   const isAdmin = useMatch('/admin/*') || useMatch('/admin');
   const isPlatform = useMatch('/platform/*') || useMatch('/platform');
   const isActivate = useMatch('/activate');
+
+  if (isPublishedMenu) return <PublicSalesMenu />;
 
   if (isCragExpress) {
     return <main className="min-h-screen px-4 py-6"><CragExpressPage /></main>;
