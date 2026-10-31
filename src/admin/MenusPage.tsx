@@ -1,7 +1,7 @@
 import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
 import {adminSupabase} from './client';
 import {QRCodeCanvas} from 'qrcode.react';
-import {downloadMenuQrCard,menuPublicUrl} from './menuQrCard';
+import {downloadMenuQrCard,menuPublicUrl,isMenuPreview} from './menuQrCard';
 type Menu={id:string;name:string;slug:string;sales_mode:'regular'|'event';status:string;location:string|null;event_start_date:string|null;event_end_date:string|null};
 type Product={id:string;name:string;price:number;is_active:boolean};
 type Size={product_id:string;name:string;price:number;display_order:number};
@@ -45,7 +45,7 @@ export default function MenusPage(){
   const canvas=qrRef.current?.querySelector('canvas');
   if(!canvas){setError('QR code is not ready. Try again.');return;}
   setDownloading(true);setError('');
-  try{await downloadMenuQrCard({businessName:data.businessName,menuName:activatedMenu.name,menuType:activatedMenu.sales_mode,location:activatedMenu.location,url:menuUrl(activatedMenu.id)},canvas);}
+  try{await downloadMenuQrCard({businessName:data.businessName,menuName:activatedMenu.name,menuType:activatedMenu.sales_mode,location:activatedMenu.location,url:menuUrl(activatedMenu.id),preview:isMenuPreview()},canvas);}
   catch(e){setError(e instanceof Error?e.message:'Could not download QR card');}
   finally{setDownloading(false);}
  }
@@ -125,6 +125,7 @@ export default function MenusPage(){
     <p className="text-sm text-zinc-600">{activatedMenu.name} now has its own public link and QR code. You can print this QR for your customers.</p>
     <div className="mx-auto max-w-sm rounded-2xl border border-zinc-200 bg-[#f5f3ef] p-4 text-center shadow-sm">
       <div className="space-y-3 rounded-xl bg-white px-5 py-7">
+       {isMenuPreview()&&<p className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">TEST ONLY · PREVIEW QR</p>}
        <h4 className="text-xl font-bold text-[#1b2822]">{data.businessName}</h4>
        <p className="text-lg font-semibold text-[#334139]">{activatedMenu.name}</p>
        <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{activatedMenu.sales_mode==='regular'?'Regular Menu':'Event Menu'}</p>
@@ -136,6 +137,7 @@ export default function MenusPage(){
       </div>
      </div>
     <p className="break-all rounded-xl bg-zinc-50 p-3 text-sm">{menuUrl(activatedMenu.id)}</p>
+    {isMenuPreview()&&<p className="text-sm font-medium text-amber-800">This QR opens the temporary development preview. Do not print or share it with customers. After the production release, download a new permanent QR card.</p>}
     <div className="flex flex-wrap gap-2"><button type="button" className={action} disabled={downloading} onClick={()=>void downloadCard()}>{downloading?'Preparing PNG…':'Download QR Card (PNG)'}</button><button type="button" className="rounded-xl border px-4 py-3 text-sm font-semibold" onClick={()=>void navigator.clipboard.writeText(menuUrl(activatedMenu.id))}>Copy URL</button><a className="rounded-xl border px-4 py-3 text-sm font-semibold" href={menuUrl(activatedMenu.id)} target="_blank" rel="noreferrer">View Menu</a><button type="button" className="rounded-xl border px-4 py-3 text-sm" onClick={()=>setActivated(null)}>Back to Library</button></div>
     <p className="text-xs text-amber-800">The menu is published for viewing only. Payment and ordering will be enabled after their tests.</p>
   </section>}
