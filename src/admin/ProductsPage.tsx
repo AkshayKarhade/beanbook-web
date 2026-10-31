@@ -6,6 +6,7 @@ import ProductImages, {type ProductImagesHandle} from './ProductImages';
 type Product = { id: string; name: string; description: string | null; price: number; is_active: boolean; created_at: string };
 type FormValues = { name: string; description: string; price: string };
 type SizeRow = { name: string; price: string };
+type GalleryImage = { product_id: string; slot: number; url: string };
 type OptionsData = { sizes: { product_id: string; name: string; price: number; display_order: number }[]; addons: { id: string; name: string; is_active: boolean }[]; prices: { addon_id: string; size_name: string; price: number }[]; links: { product_id: string; addon_id: string }[] };
 const empty: FormValues = { name: '', description: '', price: '' };
 const money = (value: number) => '₹' + Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 });
@@ -14,6 +15,8 @@ const primary = 'rounded-xl bg-[#1b2822] px-5 py-3 text-sm font-semibold text-wh
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [tab,setTab]=useState<'products'|'addons'>('products');
+  const [gallery,setGallery]=useState<GalleryImage[]>([]);
   const imagesRef = useRef<ProductImagesHandle>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,6 +69,20 @@ export default function ProductsPage() {
     if(!response.ok)throw new Error(result.error||'Options unavailable');
     return result;
   };
+  const refreshGallery = useCallback(async () => {
+    if(!adminSupabase)throw new Error('Business connection unavailable');
+    const {data:auth}=await adminSupabase.auth.getSession();
+    if(!auth.session?.access_token)throw new Error('Sign in again');
+    const response=await fetch('/api/business-products?mode=images',{headers:{Authorization:'Bearer '+auth.session.access_token}});
+    if(!(response.headers.get('content-type')||'').includes('application/json'))throw new Error('Photo service unavailable');
+    const body=await response.json();
+    if(!response.ok)throw new Error(body.error||'Unable to load photos');
+    setGallery(body.images||[]);
+  },[]);
+  useEffect(()=>{void refreshGallery().catch(e=>console.warn('Product photos could not load',e));},[refreshGallery]);
+  useEffect(() => {
+    void refreshGallery().catch(()=>undefined);
+  },[products.length,refreshGallery]);
   useEffect(() => {
     void refreshOptions().catch(e=>setOptionsError(e instanceof Error?e.message:'Options unavailable'));
   }, [refreshOptions]);
@@ -113,7 +130,7 @@ export default function ProductsPage() {
       if (!savedId) throw new Error('Product saved but the image upload could not start.');
       try { await imagesRef.current?.uploadQueued(savedId); }
       catch { await refresh(); throw new Error('Product saved, but at least one image could not upload. Edit the product to retry.'); }
-      await Promise.all([refresh(),refreshOptions()]);
+      await Promise.all([refresh(),refreshOptions(),refreshGallery()]);
       setShowForm(false);setEditingId(null);setForm(empty);
       setNotice(editingId?'Product and options updated.':'Product and options added.');
     }catch(e){setError(e instanceof Error?e.message:'Could not save product.');}
@@ -150,13 +167,17 @@ export default function ProductsPage() {
   }
 
   return <section className="space-y-6">
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div><h3 className="text-xl font-semibold">Your products</h3><p className="mt-2 text-sm text-zinc-500">Add drinks or food, set prices and manage what's available. Products belong only to your business.</p></div>
-      <button type="button" onClick={startAdd} disabled={saving || pendingProductId !== null} className={primary}>+ Add product</button>
-    </div>
+    <nav role="tablist" aria-label="Catalogue sections" className="flex gap-2 border-b border-zinc-200 pb-3">
+      <button type="button" role="tab" aria-selected={tab==='products'} onClick={()=>setTab('products')} className={'rounded-xl px-4 py-3 text-sm font-semibold '+(tab==='products'?'bg-[#1b2822] text-white':'border bg-white text-zinc-700')}>Product Library</button>
+      <button type="button" role="tab" aria-selected={tab==='addons'} onClick={()=>{setTab('addons');setShowForm(false);}} className={'rounded-xl px-4 py-3 text-sm font-semibold '+(tab==='addons'?'bg-[#1b2822] text-white':'border bg-white text-zinc-700')}>Add-On Library</button>
+    </nav>
+    {tab==='products'&&<div className="flex flex-wrap items-start justify-between gap-4">
+      <div><h3 className="text-xl font-semibold">Product Library</h3><p className="mt-2 text-sm text-zinc-500">Manage products, photos, sizes and their available add-ons.</p></div>
+      <button type="button" onClick={startAdd} disabled={saving || pendingProductId !== null} className={primary}>+ Add Product</button>
+    </div>}
     {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
-    {showForm && <form onSubmit={e => void save(e)} className="space-y-4 rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm sm:p-7">
+    {tab==='products' && showForm && <form onSubmit={e => void save(e)} className="space-y-4 rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm sm:p-7">
       <div className="flex items-center justify-between gap-4"><h4 className="text-lg font-semibold">{editingId ? 'Edit product' : 'Add a product'}</h4><button type="button" className="text-sm text-zinc-600 underline" onClick={() => setShowForm(false)}>Cancel</button></div>
       <label className="block text-sm font-medium">Product name <span className="text-red-700">*</span><input className={control + ' mt-2'} required minLength={2} maxLength={120} placeholder="e.g. Cappuccino" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}/></label>
 
@@ -185,21 +206,32 @@ export default function ProductsPage() {
       <ProductImages key={editingId || 'new'} productId={editingId} apiRef={imagesRef} />
       <button className={primary} disabled={saving || pendingProductId !== null}>{saving ? 'Saving product and photos…' : editingId ? 'Save changes' : 'Save product'}</button>
     </form>}
-    {loading ? <p className="py-8 text-sm text-zinc-500">Loading products…</p> :
+    {tab==='products' && (loading ? <p className="py-8 text-sm text-zinc-500">Loading products…</p> :
       products.length === 0 ? <div className="rounded-2xl border border-dashed border-[#d5d7d0] bg-white p-8 text-center">
         <h4 className="text-lg font-semibold">Your catalogue is empty</h4>
         <p className="mt-2 text-sm text-zinc-500">Start by adding your first product.</p>
         <button type="button" onClick={startAdd} className={primary + ' mt-5'}>Add your first product</button>
       </div> : <div className="space-y-3">{products.map(p =>
         <article key={p.id} aria-busy={pendingProductId === p.id} className={'flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-5 shadow-sm transition-colors duration-200 ' + (p.is_active ? 'border-[#e6e3dc] bg-white' : 'border-2 border-dashed border-amber-400 border-l-[6px] border-l-amber-500 bg-amber-50') + (pendingProductId === p.id ? ' ring-2 ring-amber-300' : '')}>
+          {gallery.find(image=>image.product_id===p.id && image.slot===1) &&
+            <img src={gallery.find(image=>image.product_id===p.id && image.slot===1)?.url} alt={p.name} className="h-24 w-24 shrink-0 rounded-xl object-cover" />}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h4 className={'font-semibold ' + (p.is_active ? 'text-[#1b2822]' : 'text-zinc-700')}>{p.name}</h4>
-              {!p.is_active && <span className="rounded-full border border-amber-400 bg-amber-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-950">Archived · Not for sale</span>}
+              <h4 className={'font-semibold '+(p.is_active?'text-[#1b2822]':'text-zinc-700')}>{p.name}</h4>
+              {!p.is_active&&<span className="rounded-full border border-amber-400 bg-amber-100 px-3 py-1 text-xs font-bold uppercase text-amber-950">Archived · Not for sale</span>}
             </div>
-            {p.description && <p className={'mt-1 text-sm ' + (p.is_active ? 'text-zinc-500' : 'text-zinc-600')}>{p.description}</p>}
-            <p className={'mt-2 font-semibold ' + (p.is_active ? 'text-[#1b2822]' : 'text-zinc-600')}>{money(p.price)}</p>
-            {pendingProductId === p.id && <p role="status" className="mt-2 text-sm font-medium text-amber-900">{p.is_active ? 'Archiving product…' : 'Activating product…'}</p>}
+            {p.description&&<p className="mt-1 text-sm text-zinc-500">{p.description}</p>}
+            {(()=>{
+              const sizes=options.sizes.filter(s=>s.product_id===p.id).sort((a,b)=>a.display_order-b.display_order);
+              const prices=sizes.map(s=>Number(s.price));
+              const min=Math.min(...prices),max=Math.max(...prices);
+              const linked=options.links.filter(l=>l.product_id===p.id&&options.addons.some(a=>a.id===l.addon_id&&a.is_active)).length;
+              return <div className="mt-2 space-y-1">
+                <p className="font-semibold text-[#1b2822]">{sizes.length?(min===max?money(min):money(min)+'–'+money(max)):money(p.price)}</p>
+                <p className="text-xs text-zinc-500">{sizes.length?sizes.length+' sizes · '+sizes.map(s=>s.name).join(', '):'Single price'} · {linked} add-on{linked===1?'':'s'} available</p>
+              </div>;
+            })()}
+            {pendingProductId===p.id&&<p role="status" className="mt-2 text-sm font-medium text-amber-900">{p.is_active?'Archiving product…':'Activating product…'}</p>}
           </div>
           <div className="flex gap-2">
             <button type="button" disabled={saving || pendingProductId !== null} onClick={() => startEdit(p)} className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium disabled:opacity-50">Edit</button>
@@ -208,8 +240,8 @@ export default function ProductsPage() {
               {pendingProductId === p.id ? (p.is_active ? 'Archiving…' : 'Activating…') : (p.is_active ? 'Archive' : 'Activate')}
             </button>
           </div>
-        </article>)}</div>}
-    <ProductOptions products={products} onChanged={()=>void refreshOptions()} />
-    <p className="text-xs text-zinc-500">Archiving removes a product from the active catalogue without deleting its order history. Menu and event assignment will be added separately.</p>
+        </article>)}</div>)}
+    {tab==='addons' && <ProductOptions onChanged={()=>void refreshOptions()} />}
+    {tab==='products' && <p className="text-xs text-zinc-500">Archiving preserves order history. Size-specific prices and product photos are configured from Edit.</p>}
   </section>;
 }
