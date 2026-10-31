@@ -1,7 +1,10 @@
 [build]
   command = "npm run build"
   publish = "dist"
-  functions = "api"
+
+[functions]
+  directory = "api"
+
 
 [[redirects]]
   from = "/api/create-razorpay-order"
@@ -46,9 +49,10 @@
   force = true
 
 [[redirects]]
-  from = "/beanbook/*"
-  to = "/beanbook/index.html"
+  from = "/api/business-products"
+  to = "/.netlify/functions/business-products"
   status = 200
+  force = true
 
 [[redirects]]
   from = "/api/business-onboarding"
@@ -61,6 +65,11 @@
   to = "/.netlify/functions/platform-admin"
   status = 200
   force = true
+
+[[redirects]]
+  from = "/beanbook/*"
+  to = "/beanbook/index.html"
+  status = 200
 
 # The Supabase project URL is intended to be public, unlike SUPABASE_SECRET_KEY.
 # Expose it to Vite only for Deploy Previews, without storing its value in git.
