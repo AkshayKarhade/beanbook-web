@@ -39,13 +39,15 @@ export default async function salesMenus(req:Request){
    const date=(v:unknown)=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)?v:null;
    const start=date(body.startDate),end=date(body.endDate);
    if(kind==='event'&&(!start||!end||end<start))return json({error:'Choose valid event start/end dates'},400);
-   if(kind==='regular'){
-    const {data:existing,error}=await db.from('events').select('id').eq('brand_id',brandId).eq('sales_mode','regular').maybeSingle();
-    if(error)throw error;if(existing)return json({error:'This business already has a regular menu'},409);
-   }
    const slug=(kind==='regular'?'regular-menu':name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50))+'-'+crypto.randomUUID().slice(0,8);
    const {data,error}=await db.from('events').insert({brand_id:brandId,sales_mode:kind,status:'draft',name,slug,location:location||null,event_start_date:start,event_end_date:end}).select('id').single();
    if(error)throw error;return json({ok:true,menuId:data.id},201);
+  }
+  if(body.action==='publishMenu'){
+   if(!uuid(body.menuId))return json({error:'Invalid menu'},400);
+   const {data,error}=await db.rpc('beanbook_publish_sales_menu',{p_brand_id:brandId,p_menu_id:body.menuId});
+   if(error){if(error.code==='22023')return json({error:error.message},400);throw error;}
+   return json({ok:true,menuId:data});
   }
   if(body.action==='saveDraftItems'){
    if(!uuid(body.menuId)||!Array.isArray(body.items)||body.items.length>80)return json({error:'Invalid menu configuration'},400);
