@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import businessOptions from './business-options';
 import businessImages from './business-images';
+import businessMenus from './business-menus';
 
 
 const json = (data: unknown, status = 200) =>
@@ -27,6 +28,7 @@ function parseProduct(input: Record<string, unknown>): ProductInput | null {
 export default async function businessProducts(request: Request) {
   // Reuse the proven Products Netlify endpoint for catalogue configuration.
   // The options handler independently verifies the signed-in owner and tenant.
+  if (new URL(request.url).searchParams.get('mode') === 'menus') return businessMenus(request);
   if (new URL(request.url).searchParams.get('mode') === 'images') return businessImages(request);
   if (new URL(request.url).searchParams.get('mode') === 'options') {
     return businessOptions(request);
