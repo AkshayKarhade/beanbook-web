@@ -1,20 +1,23 @@
-import {useCallback,useEffect,useState,type FormEvent} from 'react';
+import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
 import {adminSupabase} from './client';
-import {QRCodeSVG} from 'qrcode.react';
+import {QRCodeCanvas} from 'qrcode.react';
+import {downloadMenuQrCard,menuPublicUrl} from './menuQrCard';
 type Menu={id:string;name:string;slug:string;sales_mode:'regular'|'event';status:string;location:string|null;event_start_date:string|null;event_end_date:string|null};
 type Product={id:string;name:string;price:number;is_active:boolean};
 type Size={product_id:string;name:string;price:number;display_order:number};
 type Assignment={id:string;event_id:string;product_id:string;display_order:number;price_override:number|null;inventory_tracking:boolean};
 type Override={event_product_id:string;size_name:string;price:number};
-type Data={menus:Menu[];items:Assignment[];sizes:Size[];overrides:Override[];products:Product[]};
+type Data={businessName:string;menus:Menu[];items:Assignment[];sizes:Size[];overrides:Override[];products:Product[]};
 type ItemDraft={product_id:string;track_inventory:boolean;price_override:number|null;size_overrides:Record<string,number>};
 const money=(n:number)=>'₹'+n.toLocaleString('en-IN',{maximumFractionDigits:2});
 const input='w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm';
 const action='rounded-xl bg-[#1b2822] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50';
-const blank:Data={menus:[],items:[],sizes:[],overrides:[],products:[]};
+const blank:Data={businessName:'',menus:[],items:[],sizes:[],overrides:[],products:[]};
 export default function MenusPage(){
  const [data,setData]=useState<Data>(blank),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const [kind,setKind]=useState<'regular'|'event'>('regular'),[name,setName]=useState(''),[location,setLocation]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
+ const qrRef=useRef<HTMLDivElement>(null);
+ const [downloading,setDownloading]=useState(false);
  const [tab,setTab]=useState<'regular'|'event'>('regular');
  const [activated,setActivated]=useState<string|null>(null);
  const [selected,setSelected]=useState<string|null>(null),[draft,setDraft]=useState<ItemDraft[]>([]),[showCreate,setShowCreate]=useState(false);
@@ -36,7 +39,16 @@ export default function MenusPage(){
  };
  const selectedMenu=data.menus.find(m=>m.id===selected);
  const activatedMenu=data.menus.find(m=>m.id===activated);
- const menuUrl=(id:string)=>window.location.origin+'/beanbook/menu/'+id;
+ const menuUrl=menuPublicUrl;
+ async function downloadCard(){
+  if(!activatedMenu)return;
+  const canvas=qrRef.current?.querySelector('canvas');
+  if(!canvas){setError('QR code is not ready. Try again.');return;}
+  setDownloading(true);setError('');
+  try{await downloadMenuQrCard({businessName:data.businessName,menuName:activatedMenu.name,menuType:activatedMenu.sales_mode,location:activatedMenu.location,url:menuUrl(activatedMenu.id)},canvas);}
+  catch(e){setError(e instanceof Error?e.message:'Could not download QR card');}
+  finally{setDownloading(false);}
+ }
  function update(id:string,fn:(item:ItemDraft)=>ItemDraft){setDraft(v=>v.map(i=>i.product_id===id?fn(i):i));}
  async function create(e:FormEvent){e.preventDefault();setBusy(true);setError('');setMessage('');
   try{
@@ -111,9 +123,20 @@ export default function MenusPage(){
   {activatedMenu&&<section className="space-y-4 rounded-2xl border border-emerald-200 bg-white p-6" role="status">
     <div className="text-3xl" aria-hidden="true">✓</div><h3 className="text-xl font-semibold text-emerald-800">Menu activated successfully!</h3>
     <p className="text-sm text-zinc-600">{activatedMenu.name} now has its own public link and QR code. You can print this QR for your customers.</p>
-    <div className="flex justify-center rounded-xl border bg-white p-5"><QRCodeSVG value={menuUrl(activatedMenu.id)} size={210} level="M" marginSize={2}/></div>
+    <div className="mx-auto max-w-sm rounded-2xl border border-zinc-200 bg-[#f5f3ef] p-4 text-center shadow-sm">
+      <div className="space-y-3 rounded-xl bg-white px-5 py-7">
+       <h4 className="text-xl font-bold text-[#1b2822]">{data.businessName}</h4>
+       <p className="text-lg font-semibold text-[#334139]">{activatedMenu.name}</p>
+       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{activatedMenu.sales_mode==='regular'?'Regular Menu':'Event Menu'}</p>
+       <div ref={qrRef} className="flex justify-center rounded-xl border border-zinc-100 bg-white p-4">
+        <QRCodeCanvas value={menuUrl(activatedMenu.id)} size={512} level="M" marginSize={4} bgColor="#ffffff" fgColor="#111111" style={{width:240,height:240,maxWidth:'100%'}}/>
+       </div>
+       <p className="font-bold uppercase tracking-wide text-[#1b2822]">Scan to View Menu</p>
+       {activatedMenu.location&&<p className="text-xs text-zinc-500">{activatedMenu.location}</p>}
+      </div>
+     </div>
     <p className="break-all rounded-xl bg-zinc-50 p-3 text-sm">{menuUrl(activatedMenu.id)}</p>
-    <div className="flex flex-wrap gap-2"><button type="button" className={action} onClick={()=>void navigator.clipboard.writeText(menuUrl(activatedMenu.id))}>Copy URL</button><a className="rounded-xl border px-4 py-3 text-sm font-semibold" href={menuUrl(activatedMenu.id)} target="_blank" rel="noreferrer">View Menu</a><button type="button" className="rounded-xl border px-4 py-3 text-sm" onClick={()=>setActivated(null)}>Back to Library</button></div>
+    <div className="flex flex-wrap gap-2"><button type="button" className={action} disabled={downloading} onClick={()=>void downloadCard()}>{downloading?'Preparing PNG…':'Download QR Card (PNG)'}</button><button type="button" className="rounded-xl border px-4 py-3 text-sm font-semibold" onClick={()=>void navigator.clipboard.writeText(menuUrl(activatedMenu.id))}>Copy URL</button><a className="rounded-xl border px-4 py-3 text-sm font-semibold" href={menuUrl(activatedMenu.id)} target="_blank" rel="noreferrer">View Menu</a><button type="button" className="rounded-xl border px-4 py-3 text-sm" onClick={()=>setActivated(null)}>Back to Library</button></div>
     <p className="text-xs text-amber-800">The menu is published for viewing only. Payment and ordering will be enabled after their tests.</p>
   </section>}
  </section>;
