@@ -4,6 +4,12 @@
   functions = "api"
 
 [[redirects]]
+  from = "/api/business-workspace"
+  to = "/.netlify/functions/business-workspace"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/create-razorpay-order"
   to = "/.netlify/functions/create-razorpay-order"
   status = 200
