@@ -15,15 +15,16 @@ export default async function salesMenus(req:Request){
   if(!membership||membership.role!=='owner')return json({error:'Business owner access required'},403);
   const brandId=membership.brand_id as string;
   if(req.method==='GET'){
-   const [events,assignments,sizes,overrides,products]=await Promise.all([
+   const [events,assignments,sizes,overrides,products,brand]=await Promise.all([
     db.from('events').select('id,name,slug,sales_mode,status,event_start_date,event_end_date,location,ordering_closes_at').eq('brand_id',brandId).in('sales_mode',['regular','event']).order('created_at',{ascending:false}),
     db.from('event_products').select('id,event_id,product_id,display_order,price_override,inventory_tracking,events!inner(brand_id,sales_mode)').eq('events.brand_id',brandId).in('events.sales_mode',['regular','event']).order('display_order'),
     db.from('product_sizes').select('product_id,name,price,display_order').eq('brand_id',brandId),
     db.from('event_product_size_prices').select('event_product_id,size_name,price').eq('brand_id',brandId),
-    db.from('products').select('id,name,price,is_active').eq('brand_id',brandId).order('name')
+    db.from('products').select('id,name,price,is_active').eq('brand_id',brandId).order('name'),
+    db.from('brands').select('name').eq('id',brandId).single()
    ]);
-   for(const r of [events,assignments,sizes,overrides,products])if(r.error)throw r.error;
-   return json({menus:events.data||[],items:(assignments.data||[]).map(({events:ignored,...item})=>{void ignored;return item;}),sizes:sizes.data||[],overrides:overrides.data||[],products:products.data||[]});
+   for(const r of [events,assignments,sizes,overrides,products,brand])if(r.error)throw r.error;
+   return json({businessName:brand.data.name,menus:events.data||[],items:(assignments.data||[]).map(({events:ignored,...item})=>{void ignored;return item;}),sizes:sizes.data||[],overrides:overrides.data||[],products:products.data||[]});
   }
   if(!(req.headers.get('content-type')||'').includes('application/json'))return json({error:'JSON required'},415);
   const raw=await req.text();if(raw.length>26000)return json({error:'Request too large'},413);
@@ -42,12 +43,6 @@ export default async function salesMenus(req:Request){
    const slug=(kind==='regular'?'regular-menu':name.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,50))+'-'+crypto.randomUUID().slice(0,8);
    const {data,error}=await db.from('events').insert({brand_id:brandId,sales_mode:kind,status:'draft',name,slug,location:location||null,event_start_date:start,event_end_date:end}).select('id').single();
    if(error)throw error;return json({ok:true,menuId:data.id},201);
-  }
-  if(body.action==='publishMenu'){
-   if(!uuid(body.menuId))return json({error:'Invalid menu'},400);
-   const {data,error}=await db.rpc('beanbook_publish_sales_menu',{p_brand_id:brandId,p_menu_id:body.menuId});
-   if(error){if(error.code==='22023')return json({error:error.message},400);throw error;}
-   return json({ok:true,menuId:data});
   }
   if(body.action==='publishMenu'){
    if(!uuid(body.menuId))return json({error:'Invalid menu'},400);
