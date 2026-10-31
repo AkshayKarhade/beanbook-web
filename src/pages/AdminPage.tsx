@@ -112,7 +112,7 @@ export default function AdminPage() {
       </form>
       {data.menus.map(m => <article key={m.id} className="space-y-3 rounded-xl border p-4">
         <div className="flex justify-between"><strong>{m.name}</strong><span>{m.status}</span></div>
-        <p className="break-all text-sm">Customer order link: <a className="underline" href={'/beanbook/order/' + m.slug} target="_blank" rel="noreferrer">{'/beanbook/order/' + m.slug}</a></p>
+        <p className="text-sm text-gray-500">Counter ordering is ready. Public checkout requires this business to connect its own payment account.</p>
         <div className="flex flex-wrap gap-2">{products.map(p => {
           const linked = data.menuProducts.some(r => r.event_id === m.id && r.product_id === p.id && r.is_available);
           return <button key={p.id} disabled={busy} className="rounded-lg border px-3 py-2" onClick={() => void run({ action: linked ? 'removeProduct' : 'addProduct', menuId: m.id, productId: p.id }, 'Menu updated')}>{linked ? '✓ ' : '+ '}{p.name}</button>;
