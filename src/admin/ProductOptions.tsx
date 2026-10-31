@@ -88,6 +88,7 @@ export default function ProductOptions({products,onChanged}:{products:Product[];
    setError('Enter a valid Standard price.');return;
   }
   const prices=[...(standard!==''?[{size_name:'Standard',price:Number(standard)}]:[]),...sizePrices];
+  if(new Set(prices.map(p=>p.size_name.toLowerCase())).size!==prices.length){setError('Each size can have only one price, including Standard.');return;}
   if(await act({action:'saveAddon',...(addonId?{addonId}:{}),name:addonName,description:addonDescription,prices},'Add-on saved.'))setMode('none');
  }
  return <section className="mt-8 space-y-5">
