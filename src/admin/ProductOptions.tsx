@@ -15,8 +15,6 @@ const empty:Data={sizes:[],addons:[],prices:[],links:[]};
 export default function ProductOptions({products,onChanged}:{products:Product[];onChanged:()=>void}){
  const [data,setData]=useState<Data>(empty),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [mode,setMode]=useState<'none'|'addon'|'sizes'>('none');
- const [productId,setProductId]=useState('');
- const [sizeRows,setSizeRows]=useState<Row[]>([]);
  const [addonId,setAddonId]=useState('');
  const [addonName,setAddonName]=useState(''),[addonDescription,setAddonDescription]=useState('');
  const [addonPrices,setAddonPrices]=useState<Row[]>([{name:'Small',price:''},{name:'Medium',price:''},{name:'Large',price:''}]);
@@ -37,11 +35,6 @@ export default function ProductOptions({products,onChanged}:{products:Product[];
   catch(e){setError(e instanceof Error?e.message:'Could not save');return false;}
   finally{setBusy(false);}
  }
- function editSizes(product:Product){
-  setProductId(product.id);
-  const rows=data.sizes.filter(s=>s.product_id===product.id).sort((a,b)=>a.display_order-b.display_order);
-  setSizeRows(rows.length?rows.map(s=>({name:s.name,price:String(s.price)})):[{name:'Small',price:''},{name:'Medium',price:''},{name:'Large',price:''}]);setMode('sizes');setError('');
- }
  function editAddon(addon?:Addon){
   setAddonId(addon?.id||'');setAddonName(addon?.name||'');setAddonDescription(addon?.description||'');
   const prices=addon?data.prices.filter(p=>p.addon_id===addon.id).map(p=>({name:p.size_name,price:String(p.price)})):[{name:'Small',price:''},{name:'Medium',price:''},{name:'Large',price:''}];
@@ -56,12 +49,6 @@ export default function ProductOptions({products,onChanged}:{products:Product[];
    <button type="button" className={btn} onClick={()=>setRows([...rows,{name:'',price:''}])}>+ Add size</button>
   </div>;
  }
- async function saveSizes(e:FormEvent){
-  e.preventDefault();
-  const valid=sizeRows.filter(r=>r.name.trim()&&r.price!=='');
-  if(valid.length!==sizeRows.length){setError('Complete each size and price, or remove the unused row.');return;}
-  if(await act({action:'saveSizes',productId,sizes:valid.map(r=>({name:r.name,price:Number(r.price)}))},'Drink sizes saved.'))setMode('none');
- }
  async function saveAddon(e:FormEvent){
   e.preventDefault();
   const valid=addonPrices.filter(r=>r.name.trim()&&r.price!=='');
@@ -73,11 +60,6 @@ export default function ProductOptions({products,onChanged}:{products:Product[];
   <div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="text-xl font-semibold">Add-on library</h3><p className="mt-1 text-sm text-zinc-500">Create reusable add-ons and set their price for each drink size.</p></div><button type="button" className={primary} onClick={()=>editAddon()}>+ New Add-On</button></div>
   {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-red-700">{error}</p>}
   {notice&&<p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">{notice}</p>}
-  {false && mode==='sizes'&&<form className="space-y-4 rounded-2xl border bg-white p-5" onSubmit={e=>void saveSizes(e)}><h4 className="text-lg font-semibold">Sizes for {products.find(p=>p.id===productId)?.name}</h4>
-   <p className="text-sm text-zinc-500">A drink can have its own Small, Medium or Large prices. Size names must match those configured on add-ons.</p>
-   {rowsEditor(sizeRows,setSizeRows)}
-   <div className="flex gap-2"><button className={primary} disabled={busy}>Save sizes</button><button type="button" className={btn} onClick={()=>setMode('none')}>Cancel</button></div>
-  </form>}
   {mode==='addon'&&<form className="space-y-4 rounded-2xl border bg-white p-5" onSubmit={e=>void saveAddon(e)}><h4 className="text-lg font-semibold">{addonId?'Edit add-on':'New add-on'}</h4>
    <label className="block text-sm font-medium">Add-on name<input className={input+' mt-2'} required minLength={2} maxLength={120} placeholder="e.g. Almond Milk" value={addonName} onChange={e=>setAddonName(e.target.value)}/></label>
    <label className="block text-sm font-medium">Description (optional)<input className={input+' mt-2'} maxLength={500} value={addonDescription} onChange={e=>setAddonDescription(e.target.value)}/></label>
