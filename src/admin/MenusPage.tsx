@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useState,type FormEvent} from 'react';
 import {adminSupabase} from './client';
+import {QRCodeSVG} from 'qrcode.react';
 type Menu={id:string;name:string;slug:string;sales_mode:'regular'|'event';status:string;location:string|null;event_start_date:string|null;event_end_date:string|null};
 type Product={id:string;name:string;price:number;is_active:boolean};
 type Size={product_id:string;name:string;price:number;display_order:number};
@@ -14,6 +15,8 @@ const blank:Data={menus:[],items:[],sizes:[],overrides:[],products:[]};
 export default function MenusPage(){
  const [data,setData]=useState<Data>(blank),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const [kind,setKind]=useState<'regular'|'event'>('regular'),[name,setName]=useState(''),[location,setLocation]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
+ const [tab,setTab]=useState<'regular'|'event'>('regular');
+ const [activated,setActivated]=useState<string|null>(null);
  const [selected,setSelected]=useState<string|null>(null),[draft,setDraft]=useState<ItemDraft[]>([]),[showCreate,setShowCreate]=useState(false);
  const request=useCallback(async(payload?:Record<string,unknown>):Promise<Data&{menuId?:string;ok?:boolean}>=>{
   if(!adminSupabase)throw new Error('Business connection unavailable');
@@ -32,41 +35,55 @@ export default function MenusPage(){
   setDraft(rows.map(i=>({product_id:i.product_id,track_inventory:i.inventory_tracking,price_override:i.price_override,size_overrides:Object.fromEntries(data.overrides.filter(o=>o.event_product_id===i.id).map(o=>[o.size_name,Number(o.price)]))})));
  };
  const selectedMenu=data.menus.find(m=>m.id===selected);
+ const activatedMenu=data.menus.find(m=>m.id===activated);
+ const menuUrl=(id:string)=>window.location.origin+'/beanbook/menu/'+id;
  function update(id:string,fn:(item:ItemDraft)=>ItemDraft){setDraft(v=>v.map(i=>i.product_id===id?fn(i):i));}
  async function create(e:FormEvent){e.preventDefault();setBusy(true);setError('');setMessage('');
   try{
    const result=await request({action:'createDraft',kind,name,location,startDate:start||null,endDate:end||null});
-   await reload();setShowCreate(false);setMessage('Draft menu created. Add products and save.');
+   await reload();setShowCreate(false);setMessage('Draft menu created. Add products and save.');setTab(kind);
    if(result.menuId){setSelected(result.menuId);setDraft([]);}
   }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
  }
  async function save(){if(!selectedMenu)return;setBusy(true);setError('');setMessage('');
   try{
    await request({action:'saveDraftItems',menuId:selectedMenu.id,items:draft});
-   await reload();setMessage('Draft menu saved. Publishing is not enabled in this development slice.');
+   await reload();setMessage('Draft menu saved. Review products and publish to activate its public URL and QR code.');
+  }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
+ }
+ async function publish(){
+  if(!selectedMenu||selectedMenu.status!=='draft')return;
+  setBusy(true);setError('');setMessage('');
+  try{
+   await request({action:'publishMenu',menuId:selectedMenu.id});
+   await reload();setActivated(selectedMenu.id);setSelected(null);
+   setMessage('Menu published. Your unique URL and QR code are ready.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
  }
  return <section className="space-y-6">
+  <nav className="flex gap-2 border-b border-zinc-200 pb-3" role="tablist" aria-label="Menu libraries">
+   <button type="button" role="tab" aria-selected={tab==='regular'} onClick={()=>{setTab('regular');setSelected(null);setActivated(null);setShowCreate(false);}} className={'rounded-xl px-4 py-3 text-sm font-semibold '+(tab==='regular'?'bg-[#1b2822] text-white':'border bg-white text-zinc-700')}>Regular Menus</button>
+   <button type="button" role="tab" aria-selected={tab==='event'} onClick={()=>{setTab('event');setSelected(null);setActivated(null);setShowCreate(false);}} className={'rounded-xl px-4 py-3 text-sm font-semibold '+(tab==='event'?'bg-[#1b2822] text-white':'border bg-white text-zinc-700')}>Event Menus</button>
+  </nav>
   <div className="flex flex-wrap items-center justify-between gap-4">
-   <div><h3 className="text-xl font-semibold">Events & Menus</h3><p className="mt-1 text-sm text-zinc-500">Prepare your everyday menu or create a time-bound event menu. Drafts cannot take orders.</p></div>
-   <button type="button" className={action} onClick={()=>{setShowCreate(true);setSelected(null);setError('');}}>+ Create Menu</button>
+   <div><h3 className="text-xl font-semibold">{tab==='regular'?'Regular Menus':'Event Menus'}</h3><p className="mt-1 text-sm text-zinc-500">{tab==='regular'?'Create a separate menu for each café, cart or sales location.':'Manage several event menus at once, each with its own products, dates and QR code.'}</p></div>
+   <button type="button" className={action} onClick={()=>{setKind(tab);setName('');setLocation('');setStart('');setEnd('');setShowCreate(true);setSelected(null);setActivated(null);setError('');}}>+ Create {tab==='regular'?'Regular Menu':'Event Menu'}</button>
   </div>
   {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
   {message&&<p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p>}
   {showCreate&&<form onSubmit={e=>void create(e)} className="space-y-4 rounded-2xl border bg-white p-5">
     <h4 className="font-semibold">New sales menu</h4>
-    <div className="flex gap-3">{(['regular','event'] as const).map(v=><label key={v} className="flex items-center gap-2 text-sm"><input type="radio" checked={kind===v} onChange={()=>setKind(v)}/>{v==='regular'?'Regular Sales':'Event Sales'}</label>)}</div>
     <label className="block text-sm font-medium">Menu / event name<input className={input+' mt-2'} value={name} minLength={2} maxLength={120} required onChange={e=>setName(e.target.value)} placeholder={kind==='regular'?'Everyday Menu':'Weekend Coffee Festival'}/></label>
     <label className="block text-sm font-medium">Location (optional)<input className={input+' mt-2'} value={location} onChange={e=>setLocation(e.target.value)}/></label>
     {kind==='event'&&<div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium">Start date<input type="date" className={input+' mt-2'} value={start} onChange={e=>setStart(e.target.value)} required/></label><label className="text-sm font-medium">End date<input type="date" className={input+' mt-2'} min={start} value={end} onChange={e=>setEnd(e.target.value)} required/></label></div>}
     <div className="flex gap-2"><button disabled={busy} className={action}>{busy?'Creating…':'Create Draft'}</button><button type="button" className="rounded-xl border px-4 py-2" onClick={()=>setShowCreate(false)}>Cancel</button></div>
    </form>}
-  <div className="grid gap-3 md:grid-cols-2">{data.menus.map(m=><button type="button" key={m.id} onClick={()=>open(m)} className={'rounded-2xl border bg-white p-5 text-left '+(selected===m.id?'border-emerald-700 ring-2 ring-emerald-100':'border-zinc-200')}>
+  <div className="grid gap-3 md:grid-cols-2">{data.menus.filter(m=>m.sales_mode===tab).map(m=><button type="button" key={m.id} onClick={()=>{setActivated(m.status==='published'?m.id:null);if(m.status==='draft')open(m);else setSelected(null);}} className={'rounded-2xl border bg-white p-5 text-left '+(selected===m.id?'border-emerald-700 ring-2 ring-emerald-100':'border-zinc-200')}>
      <div className="flex items-center justify-between"><strong>{m.name}</strong><span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-900">{m.status}</span></div>
      <p className="mt-2 text-sm text-zinc-500">{m.sales_mode==='regular'?'Regular Sales':'Event'} · {data.items.filter(i=>i.event_id===m.id).length} products</p>
      {m.event_start_date&&<p className="mt-1 text-xs text-zinc-500">{m.event_start_date} to {m.event_end_date}</p>}
     </button>)}</div>
-  {!data.menus.length&&!showCreate&&<p className="rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-zinc-500">No new-style menus yet. Existing CRAG and Direct Sales menus are preserved separately.</p>}
+  {!data.menus.some(m=>m.sales_mode===tab)&&!showCreate&&<p className="rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-zinc-500">No menus in this section yet. Create a menu for a location or event; existing CRAG and Direct Sales flows are unchanged.</p>}
   {selectedMenu&&<div className="space-y-4 rounded-2xl border bg-white p-5">
     <div className="flex justify-between gap-3"><div><h4 className="text-lg font-semibold">{selectedMenu.name}</h4><p className="text-sm text-zinc-500">Draft menu editor · {selectedMenu.sales_mode==='regular'?'Product Library prices':'Optional event-specific prices'}</p></div><button type="button" onClick={()=>setSelected(null)} className="text-sm underline">Close</button></div>
     {selectedMenu.status==='draft'?<><p className="text-sm text-zinc-500">Select products for this menu. Each selected product can be tracked individually for inventory. For events, override only the prices that differ from the Product Library.</p>
@@ -87,8 +104,17 @@ export default function MenusPage(){
       </div>;
     })}</div>
     <button type="button" className={action} disabled={busy} onClick={()=>void save()}>{busy?'Saving…':'Save Draft Menu'}</button>
-    <p className="text-xs text-amber-800">Not published. These menus are not connected to checkout yet.</p>
+    <button type="button" className="rounded-xl border border-emerald-800 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 disabled:opacity-50" disabled={busy||!draft.length} onClick={()=>void publish()}>Publish & Generate QR</button>
+    <p className="text-xs text-amber-800">Save changes before publishing. Published menus are viewable, but checkout is not yet enabled.</p>
    </>:<p className="text-sm text-zinc-500">Only draft menus can be edited in this development slice.</p>}
    </div>}
+  {activatedMenu&&<section className="space-y-4 rounded-2xl border border-emerald-200 bg-white p-6" role="status">
+    <div className="text-3xl" aria-hidden="true">✓</div><h3 className="text-xl font-semibold text-emerald-800">Menu activated successfully!</h3>
+    <p className="text-sm text-zinc-600">{activatedMenu.name} now has its own public link and QR code. You can print this QR for your customers.</p>
+    <div className="flex justify-center rounded-xl border bg-white p-5"><QRCodeSVG value={menuUrl(activatedMenu.id)} size={210} level="M" marginSize={2}/></div>
+    <p className="break-all rounded-xl bg-zinc-50 p-3 text-sm">{menuUrl(activatedMenu.id)}</p>
+    <div className="flex flex-wrap gap-2"><button type="button" className={action} onClick={()=>void navigator.clipboard.writeText(menuUrl(activatedMenu.id))}>Copy URL</button><a className="rounded-xl border px-4 py-3 text-sm font-semibold" href={menuUrl(activatedMenu.id)} target="_blank" rel="noreferrer">View Menu</a><button type="button" className="rounded-xl border px-4 py-3 text-sm" onClick={()=>setActivated(null)}>Back to Library</button></div>
+    <p className="text-xs text-amber-800">The menu is published for viewing only. Payment and ordering will be enabled after their tests.</p>
+  </section>}
  </section>;
 }
