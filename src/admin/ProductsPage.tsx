@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { adminSupabase } from './client';
+import ProductOptions from './ProductOptions';
 
 type Product = { id: string; name: string; description: string | null; price: number; is_active: boolean; created_at: string };
 type FormValues = { name: string; description: string; price: string };
@@ -102,6 +103,7 @@ export default function ProductsPage() {
           <div className="flex gap-2"><button type="button" disabled={saving} onClick={() => startEdit(p)} className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium">Edit</button>
             <button type="button" disabled={saving} onClick={() => void setActive(p)} className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium">{p.is_active ? 'Archive' : 'Activate'}</button></div>
         </article>)}</div>}
+    <ProductOptions products={products} />
     <p className="text-xs text-zinc-500">Archiving removes a product from the active catalogue without deleting its order history. Menu and event assignment will be added separately.</p>
   </section>;
 }
