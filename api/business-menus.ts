@@ -49,6 +49,12 @@ export default async function salesMenus(req:Request){
    if(error){if(error.code==='22023')return json({error:error.message},400);throw error;}
    return json({ok:true,menuId:data});
   }
+  if(body.action==='publishMenu'){
+   if(!uuid(body.menuId))return json({error:'Invalid menu'},400);
+   const {data,error}=await db.rpc('beanbook_publish_sales_menu',{p_brand_id:brandId,p_menu_id:body.menuId});
+   if(error){if(error.code==='22023')return json({error:error.message},400);throw error;}
+   return json({ok:true,menuId:data});
+  }
   if(body.action==='saveDraftItems'){
    if(!uuid(body.menuId)||!Array.isArray(body.items)||body.items.length>80)return json({error:'Invalid menu configuration'},400);
    const items=body.items as Record<string,unknown>[];
