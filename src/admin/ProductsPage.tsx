@@ -15,6 +15,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pendingProductId, setPendingProductId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [form, setForm] = useState<FormValues>(empty);
@@ -114,19 +115,38 @@ export default function ProductsPage() {
   }
 
   async function setActive(product: Product) {
-    setSaving(true); setError(''); setNotice('');
+    if (pendingProductId !== null || saving) return;
+    const activating = !product.is_active;
+    setPendingProductId(product.id);
+    setError('');
+    setNotice('');
     try {
-      await request({ action: 'setActive', productId: product.id, active: !product.is_active });
-      await refresh();
-      setNotice(product.is_active ? 'Product archived. Existing orders are preserved.' : 'Product activated.');
-    } catch (e) { setError(e instanceof Error ? e.message : 'Could not change product status.'); }
-    finally { setSaving(false); }
+      await request({ action: 'setActive', productId: product.id, active: activating });
+      // Update the card immediately when the server confirms success,
+      // even if the follow-up catalogue refresh is slow.
+      setProducts(current => current.map(item =>
+        item.id === product.id ? { ...item, is_active: activating } : item
+      ));
+      setNotice(activating
+        ? product.name + ' is active and available in the catalogue.'
+        : product.name + ' is archived and unavailable for sale. Existing orders are preserved.');
+      try {
+        await refresh();
+      } catch {
+        // The mutation succeeded, so keep the confirmed local state.
+        setError('Status saved, but the catalogue could not be refreshed. Reload the page to check.');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not change product status.');
+    } finally {
+      setPendingProductId(null);
+    }
   }
 
   return <section className="space-y-6">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div><h3 className="text-xl font-semibold">Your products</h3><p className="mt-2 text-sm text-zinc-500">Add drinks or food, set prices and manage what's available. Products belong only to your business.</p></div>
-      <button type="button" onClick={startAdd} className={primary}>+ Add product</button>
+      <button type="button" onClick={startAdd} disabled={saving || pendingProductId !== null} className={primary}>+ Add product</button>
     </div>
     {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
@@ -156,7 +176,7 @@ export default function ProductsPage() {
         {optionsError?<p className="text-sm text-red-600">{optionsError}</p>:options.addons.filter(a=>a.is_active).length===0?<p className="text-sm text-zinc-500">No add-ons created yet.</p>:
         <div className="flex flex-wrap gap-4">{options.addons.filter(a=>a.is_active).map(a=><label key={a.id} className="flex gap-2 text-sm items-center"><input type="checkbox" checked={addonIds.includes(a.id)} onChange={e=>setAddonIds(v=>e.target.checked?[...v,a.id]:v.filter(x=>x!==a.id))}/>{a.name}</label>)}</div>}
       </div>
-      <button className={primary} disabled={saving}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save product'}</button>
+      <button className={primary} disabled={saving || pendingProductId !== null}>{saving ? 'Saving…' : editingId ? 'Save changes' : 'Save product'}</button>
     </form>}
     {loading ? <p className="py-8 text-sm text-zinc-500">Loading products…</p> :
       products.length === 0 ? <div className="rounded-2xl border border-dashed border-[#d5d7d0] bg-white p-8 text-center">
@@ -164,12 +184,23 @@ export default function ProductsPage() {
         <p className="mt-2 text-sm text-zinc-500">Start by adding your first product.</p>
         <button type="button" onClick={startAdd} className={primary + ' mt-5'}>Add your first product</button>
       </div> : <div className="space-y-3">{products.map(p =>
-        <article key={p.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm">
-          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h4 className="font-semibold">{p.name}</h4>{!p.is_active && <span className="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-600">Archived</span>}</div>
-            {p.description && <p className="mt-1 text-sm text-zinc-500">{p.description}</p>}
-            <p className="mt-2 font-semibold text-[#1b2822]">{money(p.price)}</p></div>
-          <div className="flex gap-2"><button type="button" disabled={saving} onClick={() => startEdit(p)} className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium">Edit</button>
-            <button type="button" disabled={saving} onClick={() => void setActive(p)} className="rounded-xl border border-zinc-200 px-4 py-2 text-sm font-medium">{p.is_active ? 'Archive' : 'Activate'}</button></div>
+        <article key={p.id} aria-busy={pendingProductId === p.id} className={'flex flex-wrap items-center justify-between gap-4 rounded-2xl border p-5 shadow-sm transition-colors duration-200 ' + (p.is_active ? 'border-[#e6e3dc] bg-white' : 'border-2 border-dashed border-amber-400 border-l-[6px] border-l-amber-500 bg-amber-50') + (pendingProductId === p.id ? ' ring-2 ring-amber-300' : '')}>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className={'font-semibold ' + (p.is_active ? 'text-[#1b2822]' : 'text-zinc-700')}>{p.name}</h4>
+              {!p.is_active && <span className="rounded-full border border-amber-400 bg-amber-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-amber-950">Archived · Not for sale</span>}
+            </div>
+            {p.description && <p className={'mt-1 text-sm ' + (p.is_active ? 'text-zinc-500' : 'text-zinc-600')}>{p.description}</p>}
+            <p className={'mt-2 font-semibold ' + (p.is_active ? 'text-[#1b2822]' : 'text-zinc-600')}>{money(p.price)}</p>
+            {pendingProductId === p.id && <p role="status" className="mt-2 text-sm font-medium text-amber-900">{p.is_active ? 'Archiving product…' : 'Activating product…'}</p>}
+          </div>
+          <div className="flex gap-2">
+            <button type="button" disabled={saving || pendingProductId !== null} onClick={() => startEdit(p)} className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium disabled:opacity-50">Edit</button>
+            <button type="button" disabled={saving || pendingProductId !== null} onClick={() => void setActive(p)} aria-label={(p.is_active ? 'Archive ' : 'Activate ') + p.name} className={'inline-flex min-w-[118px] items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold disabled:cursor-wait disabled:opacity-70 ' + (p.is_active ? 'border-zinc-300 bg-white text-zinc-800' : 'border-emerald-700 bg-emerald-800 text-white')}>
+              {pendingProductId === p.id && <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />}
+              {pendingProductId === p.id ? (p.is_active ? 'Archiving…' : 'Activating…') : (p.is_active ? 'Archive' : 'Activate')}
+            </button>
+          </div>
         </article>)}</div>}
     <ProductOptions products={products} onChanged={()=>void refreshOptions()} />
     <p className="text-xs text-zinc-500">Archiving removes a product from the active catalogue without deleting its order history. Menu and event assignment will be added separately.</p>
