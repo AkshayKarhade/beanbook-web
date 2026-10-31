@@ -49,6 +49,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/business-options"
+  to = "/.netlify/functions/business-options"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/business-products"
   to = "/.netlify/functions/business-products"
   status = 200
