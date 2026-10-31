@@ -23,7 +23,7 @@ async function readWorkspace(brandId: string) {
       .order('created_at', { ascending: false }),
     supabaseAdmin.from('orders')
       .select('id,order_number,event_id,total_amount,payment_status,created_at')
-      .eq('brand_id', brandId).order('created_at', { ascending: false }).limit(60),
+      .eq('brand_id', brandId).is('razorpay_order_id', null).order('created_at', { ascending: false }).limit(60),
   ]);
   if (brand.error || menus.error || products.error || orders.error) {
     throw new Error('Unable to load workspace');
@@ -205,7 +205,7 @@ export default {
           brand_id: brandId, event_id: menu.data.id, inventory_unit_id: unit.data.id,
           order_number: `BB-${randomUUID().slice(0, 8).toUpperCase()}`,
           total_amount: Math.round(total * 100) / 100,
-          payment_status: received ? 'paid' : 'pending', order_status: 'preparing',
+          payment_status: received ? 'paid' : 'pending', paid_at: received ? new Date().toISOString() : null, order_status: 'preparing',
         }).select('id,order_number,total_amount').single();
         if (orderError || !order) throw orderError ?? new Error('Could not create order');
         const { error: lineError } = await supabaseAdmin.from('order_items')
@@ -227,7 +227,7 @@ export default {
         const { data, error } = await supabaseAdmin.from('orders')
           .update({ payment_status: 'paid', paid_at: new Date().toISOString() })
           .eq('id', body.orderId).eq('brand_id', brandId)
-          .eq('payment_status', 'pending').select('id').maybeSingle();
+          .eq('payment_status', 'pending').is('razorpay_order_id', null).select('id').maybeSingle();
         if (error) throw error;
         if (!data) return errorResponse('Order is already paid or was not found');
         await supabaseAdmin.from('platform_audit').insert({
