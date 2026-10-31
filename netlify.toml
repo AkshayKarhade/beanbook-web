@@ -50,23 +50,10 @@
   to = "/beanbook/index.html"
   status = 200
 
-[[redirects]]
-  from = "/api/business-products"
-  to = "/.netlify/functions/business-products"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/business-onboarding"
-  to = "/.netlify/functions/business-onboarding"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/platform-admin"
-  to = "/.netlify/functions/platform-admin"
-  status = 200
-  force = true
+# Admin APIs (platform-admin, business-onboarding, business-products)
+# declare their own Netlify Function config.path routes. Do not rewrite
+# those URLs to /.netlify/functions/*: custom-path functions are served
+# only at the declared URL.
 
 # The Supabase project URL is intended to be public, unlike SUPABASE_SECRET_KEY.
 # Expose it to Vite only for Deploy Previews, without storing its value in git.
