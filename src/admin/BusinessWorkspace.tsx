@@ -35,8 +35,12 @@ export default function BusinessWorkspace() {
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + auth.session.access_token },
         body: JSON.stringify({ action: 'complete' }),
       });
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('Account confirmation service is unavailable (HTTP ' + response.status + '). Please check the preview deployment.');
+      }
       const result = await response.json() as { status?: string; error?: string };
-      if (!response.ok) throw new Error(result.error || 'The welcome email is pending.');
+      if (!response.ok) throw new Error(result.error || 'Account confirmation is pending.');
       setOnboardingStatus(result.status || '');
     } catch (err) {
       setOnboardingError(err instanceof Error ? err.message : 'Welcome email is pending; retry when ready.');
