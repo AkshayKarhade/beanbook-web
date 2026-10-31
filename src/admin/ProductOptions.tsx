@@ -17,6 +17,7 @@ export default function ProductOptions({products,onChanged}:{products:Product[];
  const [mode,setMode]=useState<'none'|'addon'|'sizes'>('none');
  const [addonId,setAddonId]=useState('');
  const [addonName,setAddonName]=useState(''),[addonDescription,setAddonDescription]=useState('');
+ const [standardPrice,setStandardPrice]=useState('');
  const [addonPrices,setAddonPrices]=useState<Row[]>([{name:'Small',price:''},{name:'Medium',price:''},{name:'Large',price:''}]);
  const request=useCallback(async(payload?:Record<string,unknown>)=>{
   const {data:session}=await adminSupabase!.auth.getSession();
@@ -61,7 +62,10 @@ export default function ProductOptions({products,onChanged}:{products:Product[];
  }
  function editAddon(addon?:Addon){
   setAddonId(addon?.id||'');setAddonName(addon?.name||'');setAddonDescription(addon?.description||'');
-  const prices=addon?data.prices.filter(p=>p.addon_id===addon.id).map(p=>({name:p.size_name,price:String(p.price)})):[{name:'Small',price:''},{name:'Medium',price:''},{name:'Large',price:''}];
+  const existing=addon?data.prices.filter(p=>p.addon_id===addon.id):[];
+  setStandardPrice(existing.find(p=>p.size_name.toLowerCase()==='standard')?.price.toString()??'');
+  const sizePrices=existing.filter(p=>p.size_name.toLowerCase()!=='standard');
+  const prices=sizePrices.length?sizePrices.map(p=>({name:p.size_name,price:String(p.price)})):[{name:'Small',price:''},{name:'Medium',price:''},{name:'Large',price:''}];
   setAddonPrices(prices);setMode('addon');setError('');
  }
  function rowsEditor(rows:Row[],setRows:(v:Row[])=>void){
@@ -75,10 +79,16 @@ export default function ProductOptions({products,onChanged}:{products:Product[];
  }
  async function saveAddon(e:FormEvent){
   e.preventDefault();
-  const valid=addonPrices.filter(r=>r.name.trim()&&r.price!=='');
-  if(!valid.length){setError('Add at least one size-specific price.');return;}
-  if(valid.length!==addonPrices.length){setError('Complete every size row or remove the unused row.');return;}
-  if(await act({action:'saveAddon',...(addonId?{addonId}:{}),name:addonName,description:addonDescription,prices:valid.map(r=>({size_name:r.name,price:Number(r.price)}))},'Add-on saved.'))setMode('none');
+  const incomplete=addonPrices.some(r=>r.price!==''&&!r.name.trim());
+  if(incomplete){setError('Give every priced size a name.');return;}
+  const sizePrices=addonPrices.filter(r=>r.name.trim()&&r.price!=='').map(r=>({size_name:r.name.trim(),price:Number(r.price)}));
+  const standard=standardPrice.trim();
+  if(!sizePrices.length&&!standard){setError('Enter a Standard price or at least one size-specific price.');return;}
+  if(standard&&(!Number.isFinite(Number(standard))||Number(standard)<0||Number(standard)>100000)){
+   setError('Enter a valid Standard price.');return;
+  }
+  const prices=[...(standard!==''?[{size_name:'Standard',price:Number(standard)}]:[]),...sizePrices];
+  if(await act({action:'saveAddon',...(addonId?{addonId}:{}),name:addonName,description:addonDescription,prices},'Add-on saved.'))setMode('none');
  }
  return <section className="mt-8 space-y-5">
   <div className="flex flex-wrap items-center justify-between gap-4"><div><h3 className="text-xl font-semibold">Add-on library</h3><p className="mt-1 text-sm text-zinc-500">Create reusable add-ons and set their price for each drink size.</p></div><button type="button" className={primary} disabled={busy||pendingAddonId!==null} onClick={()=>editAddon()}>+ New Add-On</button></div>
@@ -87,7 +97,13 @@ export default function ProductOptions({products,onChanged}:{products:Product[];
   {mode==='addon'&&<form className="space-y-4 rounded-2xl border bg-white p-5" onSubmit={e=>void saveAddon(e)}><h4 className="text-lg font-semibold">{addonId?'Edit add-on':'New add-on'}</h4>
    <label className="block text-sm font-medium">Add-on name<input className={input+' mt-2'} required minLength={2} maxLength={120} placeholder="e.g. Almond Milk" value={addonName} onChange={e=>setAddonName(e.target.value)}/></label>
    <label className="block text-sm font-medium">Description (optional)<input className={input+' mt-2'} maxLength={500} value={addonDescription} onChange={e=>setAddonDescription(e.target.value)}/></label>
-   <p className="text-sm font-medium">Price by drink size</p>{rowsEditor(addonPrices,setAddonPrices)}
+   <label className="block text-sm font-medium">Standard price (₹) <span className="font-normal text-zinc-500">(optional)</span>
+    <input aria-label="Standard add-on price" className={input+' mt-2'} type="number" min="0" max="100000" step="0.01" inputMode="decimal" placeholder="e.g. 50" value={standardPrice} onChange={e=>setStandardPrice(e.target.value)}/>
+    <span className="mt-1 block text-xs font-normal text-zinc-500">Used when a drink has one fixed price and no Small, Medium or Large size.</span>
+   </label>
+   <p className="text-sm font-medium">Prices by drink size <span className="font-normal text-zinc-500">(optional)</span></p>
+   <p className="text-xs text-zinc-500">Leave unused size prices blank. You can configure Standard and multiple size prices together.</p>
+   {rowsEditor(addonPrices,setAddonPrices)}
    <div className="flex gap-2"><button className={primary} disabled={busy||pendingAddonId!==null}>Save add-on</button><button type="button" className={btn} disabled={busy||pendingAddonId!==null} onClick={()=>setMode('none')}>Cancel</button></div>
   </form>}
   <div className="space-y-3">{products.map(p=><div key={p.id} className="rounded-xl border border-zinc-200 bg-white p-4">
