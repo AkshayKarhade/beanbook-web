@@ -1,9 +1,10 @@
-import {useCallback,useEffect,useRef,useState} from 'react';
+import {useCallback,useEffect,useImperativeHandle,useRef,useState,type Ref} from 'react';
 import {adminSupabase} from './client';
 export type ProductImage={id:string;product_id:string;slot:number;url:string};
-type Props={productId:string|null;onImagesChanged?:(images:ProductImage[])=>void};
+export type ProductImagesHandle={uploadQueued:(productId:string)=>Promise<void>};
+type Props={productId:string|null;apiRef:Ref<ProductImagesHandle>;onImagesChanged?:(images:ProductImage[])=>void};
 const btn='rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-medium disabled:cursor-wait disabled:opacity-50';
-export default function ProductImages({productId,onImagesChanged}:Props){
+export default function ProductImages({productId,apiRef,onImagesChanged}:Props){
  const [images,setImages]=useState<ProductImage[]>([]);
  const [pending,setPending]=useState<number|null>(null);
  const [loading,setLoading]=useState(false);
@@ -81,7 +82,7 @@ export default function ProductImages({productId,onImagesChanged}:Props){
   }
   setPending(null);setNotice('All photos uploaded.');
  }
- // Parent can call through ref passed as a callback.
+ useImperativeHandle(apiRef,()=>({uploadQueued}));
  return <section className="space-y-3 rounded-xl border border-zinc-200 p-4">
   <div><h5 className="font-semibold">Product photos <span className="font-normal text-zinc-500">(optional)</span></h5><p className="mt-1 text-sm text-zinc-500">Up to three images, 2 MB each. The first photo will be the menu cover.</p></div>
   {loading&&<p className="text-sm text-zinc-500">Loading photos…</p>}
@@ -106,6 +107,5 @@ export default function ProductImages({productId,onImagesChanged}:Props){
    })}
   </div>
   {!productId&&queued.length>0&&<p className="text-xs text-zinc-500">{queued.length} photo(s) selected. They will upload after the product is saved.</p>}
-  <span className="hidden">{String(Boolean(uploadQueued))}</span>
  </section>;
 }
