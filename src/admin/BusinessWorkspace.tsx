@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { adminBackendConfigured, adminSupabase } from './client';
 import LoginPanel from './LoginPanel';
+import ProductsPage from './ProductsPage';
 import { useBusinessSession } from './useBusinessSession';
 
 type Section = 'overview' | 'products' | 'orders' | 'events' | 'reports' | 'settings';
@@ -77,9 +78,12 @@ export default function BusinessWorkspace() {
   return (
     <div className="min-h-screen bg-[#f5f3ef] text-[#202923] lg:flex">
       <aside className="border-b border-zinc-200 bg-[#1b2822] text-white lg:flex lg:min-h-screen lg:w-64 lg:flex-col lg:border-b-0">
-        <div className="flex items-center justify-between px-6 py-6 lg:pb-10">
-          <Link to="/" className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-lg font-black text-[#1b2822]">B</span><span><span className="block text-lg font-semibold tracking-tight">BeanBook</span><span className="block text-[10px] uppercase tracking-[0.18em] text-white/55">Business Console</span></span></Link>
-          <span className="rounded-full border border-white/15 px-2 py-1 text-[10px] text-white/70 lg:hidden">STEP 1</span>
+        <div className="flex items-center justify-between gap-3 px-5 py-5 lg:px-6 lg:py-7">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">Your business</p>
+            <h1 className="truncate text-lg font-semibold tracking-tight" title={session.businessName}>{session.businessName}</h1>
+          </div>
+          <button type="button" onClick={() => void signOut()} className="shrink-0 rounded-xl border border-white/25 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 sm:text-sm">Sign out</button>
         </div>
         <nav aria-label="Business navigation" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-1 lg:flex-col lg:overflow-visible lg:pb-0">
           {nav.map((item)=><button key={item.id} onClick={()=>setSection(item.id)} aria-current={section===item.id?'page':undefined} className={'flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm transition lg:w-full ' + (section === item.id ? 'bg-white/15 font-semibold text-white' : 'text-white/65 hover:bg-white/10 hover:text-white')}>
@@ -89,23 +93,15 @@ export default function BusinessWorkspace() {
         <div className="hidden border-t border-white/10 px-6 py-5 text-xs text-white/60 lg:block">Secure business workspace · Preview</div>
       </aside>
       <div className="min-w-0 flex-1">
-        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#e6e3dc] bg-white px-5 py-5 sm:px-9">
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6b8974]">Your Business</p>
-            <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{session.businessName}</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden text-right sm:block"><p className="max-w-40 truncate text-sm font-medium">{session.email}</p><p className="text-xs capitalize text-zinc-500">{session.role}</p></div>
-            <button onClick={()=>void signOut()} className="rounded-xl border border-zinc-200 px-4 py-2.5 text-sm font-medium hover:bg-zinc-50">Sign out</button>
-          </div>
-        </header>
+
         <main className="mx-auto max-w-6xl px-5 py-8 sm:px-9 sm:py-10">
           {onboardingStatus === 'completed' && <div role="status" className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">🎉 Welcome aboard! Your Business Admin account is active and your welcome email has been sent.</div>}
           {onboardingError && <div role="alert" className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">{onboardingError} <button type="button" disabled={checkingOnboarding} className="ml-2 font-semibold underline" onClick={()=>void finishOnboarding()}>Retry welcome email</button></div>}
           <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-            <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6b8974]">BeanBook / {current.name}</p><h2 className="mt-2 text-3xl font-semibold tracking-tight">{current.name}</h2></div>
-            <span className="rounded-full border border-[#cdded1] bg-[#eaf3ec] px-3 py-1.5 text-xs font-medium text-[#426d4c]">Foundation Preview · Step 1 of 5</span>
+            <div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6b8974]">{session.businessName} / {current.name}</p><h2 className="mt-2 text-3xl font-semibold tracking-tight">{current.name}</h2></div>
+
           </div>
+          {section==='products' && <ProductsPage />}
           {section==='overview' && <>
             <div className="grid gap-4 sm:grid-cols-3">
               {[['Your workspace','Connected','Business access verified'],['Operating locations','Coming in Step 3','Location-based ordering'],['Live order queue','Coming in Step 4','Real-time fulfillment']].map(([label,value,note])=><div key={label} className="rounded-2xl border border-[#e6e3dc] bg-white p-6 shadow-sm"><p className="text-sm text-zinc-500">{label}</p><p className="mt-3 text-xl font-semibold">{value}</p><p className="mt-2 text-xs text-zinc-400">{note}</p></div>)}
@@ -113,7 +109,7 @@ export default function BusinessWorkspace() {
             <div className="mt-7 rounded-3xl border border-[#e6e3dc] bg-white p-7 sm:p-9">
               <span className="text-xs font-semibold uppercase tracking-wider text-[#688b75]">Getting started</span>
               <h3 className="mt-3 text-2xl font-semibold">Your business, one place.</h3>
-              <p className="mt-3 max-w-2xl leading-7 text-zinc-600">BeanBook connects your catalogue, customer orders, payment records, events, and reporting in a single workspace. Each business has its own private data and customizable customer experience.</p>
+              <p className="mt-3 max-w-2xl leading-7 text-zinc-600">Manage your catalogue, customer orders, payment records, events and reporting in one place. Each business has its own private data and customizable customer experience.</p>
               <button onClick={()=>setSection('settings')} className="mt-6 rounded-xl bg-[#1b2822] px-5 py-3 text-sm font-semibold text-white hover:bg-[#304438]">Manage business profile</button>
             </div>
           </>}
@@ -126,7 +122,7 @@ export default function BusinessWorkspace() {
               <p className="rounded-xl bg-[#f5f3ef] px-4 py-3 text-xs leading-6 text-zinc-500">To change business account details, contact your BeanBook platform administrator.</p>
             </div>
           </div>}
-          {section!=='overview' && section!=='settings' && <div className="rounded-3xl border border-dashed border-[#d5d7d0] bg-white p-10 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eff4ee] text-2xl">{current.icon}</div><h3 className="mt-5 text-xl font-semibold">{current.name} is coming in Step {current.step}</h3><p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-500">This is the shared navigation shell. The module will be built, tested, and enabled in its scheduled step. No dummy orders or fictional sales are displayed.</p></div>}
+          {section!=='overview' && section!=='settings' && section!=='products' && <div className="rounded-3xl border border-dashed border-[#d5d7d0] bg-white p-10 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eff4ee] text-2xl">{current.icon}</div><h3 className="mt-5 text-xl font-semibold">{current.name} is coming in Step {current.step}</h3><p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-500">This is the shared navigation shell. The module will be built, tested, and enabled in its scheduled step. No dummy orders or fictional sales are displayed.</p></div>}
         </main>
       </div>
     </div>
