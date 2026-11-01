@@ -6,7 +6,7 @@ import {adminSupabase} from './client';
 
 type Addon={addon_id:string;addon_name:string;unit_price:number|string};
 type Item={id:string;product_id:string;quantity:number;unit_price:number|string;size_name:string|null;prep_started_at:string|null;prep_ready_at:string|null;fulfillment_status:'received'|'preparing'|'ready'|'completed'|'cancelled';round_number:number|null;products:{name:string}|{name:string}[]|null;order_item_addons:Addon[]};
-type Order={id:string;order_number:string;event_id:string;created_at:string;closed_at:string|null;total_amount:number|string;payment_status:string;paid_at:string|null;billing_mode:'pay_first'|'open_bill';billing_status:'open'|'settlement_in_progress'|'settled'|'voided';order_items:Item[];customers:{name:string;phone:string}|{name:string;phone:string}[]|null};
+type Order={id:string;order_number:string;event_id:string;customer_id:string|null;created_at:string;closed_at:string|null;total_amount:number|string;payment_status:string;paid_at:string|null;billing_mode:'pay_first'|'open_bill';billing_status:'open'|'settlement_in_progress'|'settled'|'voided';order_items:Item[];customers:{name:string;phone:string}|{name:string;phone:string}[]|null};
 type MenuProduct={id:string;name:string;price:number|null;sizes:{name:string;price:number}[]};
 type Opt={id:string;name:string;is_active:boolean};
 type OptionPrice={addon_id:string;size_name:string;price:number};
@@ -65,6 +65,7 @@ export default function LiveOrders(){
  const openEmailBill=async (o:Order)=>{
   setEmailOrderId(o.id);setBillEmail('');setEmailNotice('');setEmailError('');setEmailRequestId(crypto.randomUUID());
   try{const auth=await adminSupabase?.auth.getSession();const token=auth?.data.session?.access_token;if(!token)return;
+   if(!o.customer_id)return;
    const response=await fetch('/api/business-products?mode=customers&id='+encodeURIComponent(o.customer_id),{headers:{Authorization:'Bearer '+token}});
    if(response.ok){const d=await response.json();setBillEmail(d.insights?.email||'');}
   }catch{ /* Allow staff to enter the address */ }
