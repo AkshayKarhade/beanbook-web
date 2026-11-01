@@ -61,6 +61,7 @@ export default function CustomersPage({canEdit=false}:{canEdit?:boolean}){
  },[selectedId,saving]);
  useEffect(()=>{
   if(!selectedId)return;
+  const customerId=selectedId;
   const controller=new AbortController();
   async function loadInsights(){
    setInsightsLoading(true);setInsightsError('');setInsights(null);
@@ -68,7 +69,7 @@ export default function CustomersPage({canEdit=false}:{canEdit?:boolean}){
     const {data:auth}=await adminSupabase!.auth.getSession();
     const token=auth.session?.access_token;
     if(!token)throw new Error('Session expired. Sign in again.');
-    const res=await fetch('/api/business-products?mode=customers&id='+encodeURIComponent(selectedId),{
+    const res=await fetch('/api/business-products?mode=customers&id='+encodeURIComponent(customerId),{
      headers:{Authorization:'Bearer '+token},signal:controller.signal
     });
     const result=await res.json();
