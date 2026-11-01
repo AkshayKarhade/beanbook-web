@@ -2,6 +2,9 @@ import {createClient} from '@supabase/supabase-js';
 
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store'}});
 const uuid=(value:unknown):value is string=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+type Item={quantity:number;size_name:string|null;products:{name:string}|{name:string}[]|null};
+type Order={id:string;order_number:string;created_at:string;total_amount:number|string;payment_status:string;order_items:Item[]};
+const productName=(p:Item['products'])=>(Array.isArray(p)?p[0]?.name:p?.name)||'Unknown product';
 type SummaryRow={customer_id:string;customer_name:string;phone:string;lifetime_value:number|string;order_count:number|string;latest_order_at:string|null};
 
 export default async function businessCustomers(req:Request){
@@ -19,6 +22,35 @@ export default async function businessCustomers(req:Request){
   if(!membership||!['owner','staff'].includes(membership.role))return json({error:'Business access required'},403);
 
   if(req.method==='GET'){
+   const id=new URL(req.url).searchParams.get('id');
+   if(id!==null){
+    if(!uuid(id))return json({error:'Invalid customer ID'},400);
+    const {data:customer,error:ce}=await db.from('customers').select('created_at').eq('id',id).eq('brand_id',membership.brand_id).maybeSingle();
+    if(ce)throw ce;
+    if(!customer)return json({error:'Customer not found'},404);
+    const orders=()=>db.from('orders').eq('brand_id',membership.brand_id).eq('customer_id',id);
+    const [first,paid,recent,products]=await Promise.all([
+     orders().select('created_at').order('created_at',{ascending:true}).limit(1).maybeSingle(),
+     orders().select('id',{count:'exact',head:true}).eq('payment_status','paid'),
+     orders().select('id,order_number,created_at,total_amount,payment_status,order_items(quantity,size_name,products(name))').order('created_at',{ascending:false}).limit(5),
+     orders().select('order_items(quantity,size_name,products(name))').eq('payment_status','paid').order('created_at',{ascending:false}).limit(50)
+    ]);
+    for(const r of [first,paid,recent,products])if(r.error)throw r.error;
+    const counts=new Map<string,number>();
+    for(const o of (products.data||[]) as {order_items:Item[]}[])for(const item of o.order_items||[]){
+     const name=productName(item.products);
+     if(name!=='Unknown product')counts.set(name,(counts.get(name)||0)+Number(item.quantity||0));
+    }
+    const top=[...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))[0];
+    return json({insights:{
+     customerSince:customer.created_at,firstOrderAt:first.data?.created_at||null,paidOrderCount:paid.count||0,
+     topProduct:top?{name:top[0],quantity:top[1]}:null,topProductSampleSize:(products.data||[]).length,
+     recentOrders:((recent.data||[]) as Order[]).map(o=>({
+      id:o.id,number:o.order_number,createdAt:o.created_at,amount:Number(o.total_amount),paymentStatus:o.payment_status,
+      items:(o.order_items||[]).map(i=>({name:productName(i.products),quantity:Number(i.quantity),size:i.size_name}))
+     }))
+    }});
+   }
    const {data,error}=await db.rpc('beanbook_customer_summary',{p_brand_id:membership.brand_id});
    if(error)throw error;
    return json({customers:((data||[]) as SummaryRow[]).map(r=>({
