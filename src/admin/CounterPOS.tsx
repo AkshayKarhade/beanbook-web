@@ -290,7 +290,7 @@ export default function CounterPOS({
         <section className="flex flex-col rounded-3xl bg-white p-5 shadow-sm sm:p-7"><h3 className="text-xl font-bold">Verify payment</h3>
          <p className="mt-2 text-sm leading-6 text-zinc-500">Check the receiving bank or UPI app. Scanning a QR alone does not prove payment.</p>
          {paymentMethod==='upi'&&<label className="mt-6 block space-y-2 text-sm font-semibold">UPI transaction reference<input className={input} value={reference} onChange={e=>setReference(e.target.value)} placeholder="Transaction reference from payment received" autoComplete="off"/></label>}
-         <div className="mt-auto pt-8"><button type="button" onClick={()=>void confirmPayment()} disabled={busy||(paymentMethod==='upi'&&(!upiUri||!^[A-Za-z0-9-]{8,35}$/.test(reference.trim())))} className={primary+' w-full'}>{busy?'Verifying…':'Verify & Mark Paid'}</button>
+         <div className="mt-auto pt-8"><button type="button" onClick={()=>void confirmPayment()} disabled={busy||(paymentMethod==='upi'&&(!upiUri||!/^[A-Za-z0-9-]{8,35}$/.test(reference.trim())))} className={primary+' w-full'}>{busy?'Verifying…':'Verify & Mark Paid'}</button>
           <p className="mt-3 text-center text-xs leading-5 text-zinc-500">Only authorized café staff can record payment confirmation.</p>
          </div>
         </section>
