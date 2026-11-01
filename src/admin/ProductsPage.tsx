@@ -43,7 +43,7 @@ export default function ProductsPage() {
     });
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
-      throw new Error('Product service is unavailable (HTTP ' + response.status + '). Please check the Netlify preview deployment.');
+      throw new Error('Product service is unavailable (HTTP ' + response.status + '). Please try again or contact support.');
     }
     const result = await response.json() as { products?: Product[]; error?: string };
     if (!response.ok) throw new Error(result.error || 'Could not complete the request (HTTP ' + response.status + ').');
