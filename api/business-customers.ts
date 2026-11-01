@@ -28,12 +28,12 @@ export default async function businessCustomers(req:Request){
     const {data:customer,error:ce}=await db.from('customers').select('created_at').eq('id',id).eq('brand_id',membership.brand_id).maybeSingle();
     if(ce)throw ce;
     if(!customer)return json({error:'Customer not found'},404);
-    const orders=()=>db.from('orders').eq('brand_id',membership.brand_id).eq('customer_id',id);
+    const orders=()=>db.from('orders');
     const [first,paid,recent,products]=await Promise.all([
-     orders().select('created_at').order('created_at',{ascending:true}).limit(1).maybeSingle(),
-     orders().select('id',{count:'exact',head:true}).eq('payment_status','paid'),
-     orders().select('id,order_number,created_at,total_amount,payment_status,order_items(quantity,size_name,products(name))').order('created_at',{ascending:false}).limit(5),
-     orders().select('order_items(quantity,size_name,products(name))').eq('payment_status','paid').order('created_at',{ascending:false}).limit(50)
+     orders().select('created_at').eq('brand_id',membership.brand_id).eq('customer_id',id).order('created_at',{ascending:true}).limit(1).maybeSingle(),
+     orders().select('id',{count:'exact',head:true}).eq('brand_id',membership.brand_id).eq('customer_id',id).eq('payment_status','paid'),
+     orders().select('id,order_number,created_at,total_amount,payment_status,order_items(quantity,size_name,products(name))').eq('brand_id',membership.brand_id).eq('customer_id',id).order('created_at',{ascending:false}).limit(5),
+     orders().select('order_items(quantity,size_name,products(name))').eq('brand_id',membership.brand_id).eq('customer_id',id).eq('payment_status','paid').order('created_at',{ascending:false}).limit(50)
     ]);
     for(const r of [first,paid,recent,products])if(r.error)throw r.error;
     const counts=new Map<string,number>();
