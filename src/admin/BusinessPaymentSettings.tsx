@@ -8,6 +8,9 @@ const selected = 'border-[#365841] bg-[#eff6ef] ring-1 ring-[#365841]';
 const unselected = 'border-zinc-200 bg-white hover:border-[#bac8bd]';
 
 export default function BusinessPaymentSettings() {
+  const [billingMode,setBillingMode]=useState<'pay_first'|'open_bill'>('pay_first');
+  const [billingBusy,setBillingBusy]=useState(false);
+  const [billingMessage,setBillingMessage]=useState('');
   const [choice, setChoice] = useState<PaymentChoice>('self_upi');
   const [upi, setUpi] = useState('');
   const [payee, setPayee] = useState('');
