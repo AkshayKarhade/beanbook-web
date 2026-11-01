@@ -111,7 +111,7 @@ export default function BusinessWorkspace() {
 
           </div>
           {section==='products' && <ProductsPage />}
-          {section==='events' && <MenusPage />}
+          {section==='events' && <MenusPage onReturnToLiveOrders={()=>setSection('orders')} />}
           {section==='customers' && <CustomersPage canEdit={session.role==='owner'} />}
           {section==='orders' && <LiveOrders />}
           {section==='overview' && <>
