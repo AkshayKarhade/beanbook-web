@@ -17,7 +17,8 @@ export default async function options(req:Request){
   if(authError||!identity.user||identity.user.is_anonymous)return json({error:'Session expired'},401);
   const {data:member,error:memError}=await db.from('admin_users').select('brand_id,role').eq('supabase_user_id',identity.user.id).maybeSingle();
   if(memError)throw memError;
-  if(!member||member.role!=='owner')return json({error:'Business owner required'},403);
+  if(!member||!['owner','staff'].includes(member.role))return json({error:'Business access required'},403);
+  if(req.method==='POST'&&member.role!=='owner')return json({error:'Only Business Admin may change options'},403);
   const brand=member.brand_id;
   if(req.method==='GET'){
    const [sizes,addons,prices,links]=await Promise.all([
