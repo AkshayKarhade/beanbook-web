@@ -20,9 +20,11 @@ export default async function businessOnboarding(request: Request) {
   }
 
   let action = '';
+  let pilotTier = '';
   try {
-    const body = await request.json() as { action?: unknown };
+    const body = await request.json() as { action?: unknown; pilotTier?: unknown };
     action = typeof body?.action === 'string' ? body.action : '';
+    pilotTier = typeof body?.pilotTier === 'string' ? body.pilotTier : '';
   } catch {
     return json({ error: 'Invalid request.' }, 400);
   }
@@ -59,6 +61,9 @@ export default async function businessOnboarding(request: Request) {
     }
 
     if (action === 'credentials-set') {
+      if (!['base', 'growth', 'complete'].includes(pilotTier)) return json({ error: 'Choose a valid pilot plan.' }, 400);
+      const { error: tierError } = await admin.from('business_invitations').update({ pilot_tier: pilotTier }).eq('id', invitation.id);
+      if (tierError) throw tierError;
       if (invitation.status === 'activated') return json({ status: 'completed' });
       if (invitation.status === 'credentials_set' || invitation.status === 'sending_confirmation') {
         return json({ status: 'credentials_set' });
