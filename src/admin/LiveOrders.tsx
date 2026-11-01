@@ -41,6 +41,9 @@ export default function LiveOrders(){
  const [now,setNow]=useState(Date.now()),[loading,setLoading]=useState(true);
  const [addToBill,setAddToBill]=useState<string|null>(null);
  const [printOrderId,setPrintOrderId]=useState<string|null>(null);
+ const [emailOrderId,setEmailOrderId]=useState<string|null>(null),[billEmail,setBillEmail]=useState('');
+ const [emailRequestId,setEmailRequestId]=useState(()=>crypto.randomUUID()),[sendingEmail,setSendingEmail]=useState(false);
+ const [emailNotice,setEmailNotice]=useState(''),[emailError,setEmailError]=useState('');
  const [editing,setEditing]=useState<{orderId:string;itemId:string}|null>(null),[editRequest,setEditRequest]=useState(()=>crypto.randomUUID());
  const [selected,setSelected]=useState<string|null>(null),[paymentMethod,setPaymentMethod]=useState<'cash'|'upi'>('cash'),[reference,setReference]=useState('');
  const [paymentSettings,setPaymentSettings]=useState<{upi_vpa:string;payee_name:string}|null>(null);
@@ -58,6 +61,28 @@ export default function LiveOrders(){
  },[refresh]);
  const chosen=orders.find(o=>o.id===selected);
  const printOrder=orders.find(o=>o.id===printOrderId);
+ const emailOrder=orders.find(o=>o.id===emailOrderId);
+ const openEmailBill=async (o:Order)=>{
+  setEmailOrderId(o.id);setBillEmail('');setEmailNotice('');setEmailError('');setEmailRequestId(crypto.randomUUID());
+  try{const auth=await adminSupabase?.auth.getSession();const token=auth?.data.session?.access_token;if(!token)return;
+   const response=await fetch('/api/business-products?mode=customers&id='+encodeURIComponent(o.customer_id),{headers:{Authorization:'Bearer '+token}});
+   if(response.ok){const d=await response.json();setBillEmail(d.insights?.email||'');}
+  }catch{ /* Allow staff to enter the address */ }
+ };
+ const sendEmailBill=async()=>{
+  if(!emailOrder||sendingEmail)return;
+  setSendingEmail(true);setEmailError('');setEmailNotice('');
+  try{
+   const auth=await adminSupabase?.auth.getSession();const token=auth?.data.session?.access_token;
+   if(!token)throw new Error('Session expired. Sign in again.');
+   const response=await fetch('/api/business-products?mode=bill-email',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({orderId:emailOrder.id,requestId:emailRequestId,email:billEmail.trim()})});
+   const d=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(d.error||'Could not send the bill.');
+   setEmailNotice(d.message||'Email accepted by provider.');
+   if(d.sent)setEmailRequestId(crypto.randomUUID());
+  }catch(e){setEmailError(e instanceof Error?e.message:'Could not send the bill');}
+  finally{setSendingEmail(false);}
+ };
  const printBill=(orderId:string)=>{
   // Render the receipt in document.body, outside the dashboard's #root.
   // Measure at its real 55mm width before choosing the required roll-paper length.
@@ -134,11 +159,23 @@ export default function LiveOrders(){
      {o.billing_mode==='open_bill'&&o.billing_status==='open'&&o.payment_status==='pending'&&i.fulfillment_status==='received'&&<button type="button" disabled={busy} className="mr-4 mt-2 text-xs font-bold text-sky-800 underline" onClick={()=>{setEditing({orderId:o.id,itemId:i.id});setEditRequest(crypto.randomUUID());setSizeName(i.size_name||'');setAddonIds(i.order_item_addons.map(a=>a.addon_id));void loadMenu(o);}}>Edit Item</button>}
      {o.billing_mode==='open_bill'&&o.billing_status==='open'&&i.fulfillment_status==='received'&&<button disabled={busy} className="mt-2 text-xs font-semibold text-red-700 underline" onClick={()=>{const reason=window.prompt('Reason for cancelling this unprepared item?');if(reason)void collect('cancelItem',{itemId:i.id,reason});}}>Cancel item</button>}
     </div>)}</div>
-   <footer className="flex flex-wrap gap-2 border-t border-zinc-100 bg-[#fafbf9] p-4"><button type="button" className={secondary} onClick={()=>printBill(o.id)}>Print Bill</button>
+   <footer className="flex flex-wrap gap-2 border-t border-zinc-100 bg-[#fafbf9] p-4"><button type="button" className={secondary} onClick={()=>printBill(o.id)}>Print Bill</button><button type="button" className={secondary} onClick={()=>void openEmailBill(o)}>Email Bill</button>
     {o.billing_mode==='open_bill'&&o.billing_status==='open'&&<><button className={secondary} disabled={busy} onClick={()=>{setAddToBill(o.id);void loadMenu(o);}}>+ Add Products</button><button className={primary} disabled={busy} onClick={()=>void begin(o)}>Settle Bill · {money(o.total_amount)}</button></>}
     {o.billing_mode==='open_bill'&&o.billing_status==='settlement_in_progress'&&<button className={primary} onClick={()=>{setSelected(o.id);setAdding(false);}}>Continue Settlement</button>}
     {o.billing_mode==='pay_first'&&o.payment_status==='pending'&&<button className={primary} onClick={()=>{setSelected(o.id);setAdding(false);}}>Collect Payment</button>}
    </footer></article>)}</div>}
+  {emailOrder&&<div className="fixed inset-0 z-[165] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label="Email customer bill">
+   <div className="w-full max-w-md space-y-4 rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl">
+    <div className="flex items-start justify-between"><div><h3 className="text-xl font-bold">Email Bill</h3><p className="mt-1 text-sm text-zinc-500">{emailOrder.order_number} · {label(emailOrder.customers)}</p></div><button type="button" className={secondary} disabled={sendingEmail} onClick={()=>setEmailOrderId(null)}>Close</button></div>
+    <p className="text-sm text-zinc-600">Send the itemized {emailOrder.payment_status==='paid'?'paid receipt':'unpaid bill'} and save this address in the customer's profile.</p>
+    <form onSubmit={e=>{e.preventDefault();void sendEmailBill();}} className="space-y-4">
+     <label className="block text-sm font-semibold">Customer email address<input autoFocus type="email" required maxLength={254} autoComplete="email" value={billEmail} onChange={e=>{setBillEmail(e.target.value);setEmailNotice('');setEmailRequestId(crypto.randomUUID());}} placeholder="customer@example.com" className="mt-2 w-full rounded-xl border border-zinc-300 p-3"/></label>
+     {emailError&&<p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{emailError}</p>}
+     {emailNotice&&<p role="status" className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900">{emailNotice}</p>}
+     <button type="submit" className={primary+' w-full'} disabled={sendingEmail||Boolean(emailNotice)}>{sendingEmail?'Sending email…':emailNotice?'Email accepted':'Send Bill via Email'}</button>
+    </form>
+   </div>
+  </div>}
   {printOrder&&createPortal(<div id="bb-print-receipt" aria-label="Printable bill">
     <div className="receipt-center receipt-heading">BeanBook · Customer Bill</div>
     <div className="receipt-center">{printOrder.order_number}</div>
