@@ -3,7 +3,7 @@ import {QRCodeCanvas} from 'qrcode.react';
 import CounterPOS from './CounterPOS';
 import {adminSupabase} from './client';
 
-type Addon={addon_name:string;unit_price:number|string};
+type Addon={addon_id:string;addon_name:string;unit_price:number|string};
 type Item={id:string;product_id:string;quantity:number;unit_price:number|string;size_name:string|null;prep_started_at:string|null;prep_ready_at:string|null;fulfillment_status:'received'|'preparing'|'ready'|'completed'|'cancelled';round_number:number|null;products:{name:string}|{name:string}[]|null;order_item_addons:Addon[]};
 type Order={id:string;order_number:string;event_id:string;created_at:string;total_amount:number|string;payment_status:string;paid_at:string|null;billing_mode:'pay_first'|'open_bill';billing_status:'open'|'settlement_in_progress'|'settled'|'voided';order_items:Item[];customers:{name:string;phone:string}|{name:string;phone:string}[]|null};
 type MenuProduct={id:string;name:string;price:number|null;sizes:{name:string;price:number}[]};
@@ -39,6 +39,7 @@ export default function LiveOrders(){
  const [filter,setFilter]=useState<'active'|'history'>('active'),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [now,setNow]=useState(Date.now()),[loading,setLoading]=useState(true);
  const [addToBill,setAddToBill]=useState<string|null>(null);
+ const [editing,setEditing]=useState<{orderId:string;itemId:string}|null>(null),[editRequest,setEditRequest]=useState(()=>crypto.randomUUID());
  const [selected,setSelected]=useState<string|null>(null),[paymentMethod,setPaymentMethod]=useState<'cash'|'upi'>('cash'),[reference,setReference]=useState('');
  const [paymentSettings,setPaymentSettings]=useState<{upi_vpa:string;payee_name:string}|null>(null);
  const [adding,setAdding]=useState(false),[products,setProducts]=useState<MenuProduct[]>([]),[addons,setAddons]=useState<Opt[]>([]),[prices,setPrices]=useState<OptionPrice[]>([]),[allowed,setAllowed]=useState<Allowed[]>([]);
@@ -77,6 +78,10 @@ export default function LiveOrders(){
    setTracked((bd.items||[]).filter((i:{event_id:string;inventory_tracking:boolean})=>i.event_id===o.event_id&&i.inventory_tracking).map((i:{product_id:string})=>i.product_id));
   }catch(e){setError(e instanceof Error?e.message:String(e));}
  }
+ const editOrder=orders.find(o=>o.id===editing?.orderId);
+ const editItem=editOrder?.order_items.find(i=>i.id===editing?.itemId);
+ const editProduct=products.find(p=>p.id===editItem?.product_id);
+ const editAddons=addons.filter(a=>a.is_active&&allowed.some(l=>l.product_id===editItem?.product_id&&l.addon_id===a.id)&&prices.some(p=>p.addon_id===a.id&&p.size_name.toLowerCase()===(sizeName||'standard').toLowerCase()));
  const picked=products.find(p=>p.id===productId);
  const validAddons=addons.filter(a=>a.is_active&&allowed.some(l=>l.product_id===productId&&l.addon_id===a.id)&&prices.some(p=>p.addon_id===a.id&&p.size_name.toLowerCase()===(sizeName||'standard').toLowerCase()));
  const unitPrice=(p:MenuProduct,size:string,ids:string[])=>Number((p.sizes.length?p.sizes.find(s=>s.name===size)?.price:p.price)||0)+ids.reduce((sum,id)=>sum+Number(prices.find(x=>x.addon_id===id&&x.size_name.toLowerCase()===(size||'standard').toLowerCase())?.price||0),0);
@@ -101,6 +106,7 @@ export default function LiveOrders(){
      <div><p className="font-semibold">{i.quantity} × {label(i.products)}</p><p className="mt-1 text-xs text-zinc-500">{[i.size_name,i.order_item_addons?.map(a=>a.addon_name).join(', ')].filter(Boolean).join(' · ')||'Standard'} · Round {i.round_number||1}</p></div>
      <div className={'mt-3 inline-flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2 '+preparationColors[i.fulfillment_status].timer}><span className="text-xs font-bold">◷ Prep Time</span><strong className="font-mono text-lg font-extrabold tabular-nums">{i.prep_started_at?clock(i.prep_started_at,i.prep_ready_at?Date.parse(i.prep_ready_at):now):'00:00:00'}</strong><span className="text-xs font-semibold">{i.prep_ready_at?'Finished':i.prep_started_at?'Running':'Not started'}</span></div>
      <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className={'rounded-full px-3 py-1 text-xs font-bold capitalize '+preparationColors[i.fulfillment_status].chip}>{i.fulfillment_status}</span>{itemNext(i.fulfillment_status)&&<button disabled={busy||o.payment_status==='paid_stock_issue'||(o.billing_mode==='pay_first'&&o.payment_status!=='paid')} className={prepareAction+' '+preparationColors[i.fulfillment_status].action} onClick={()=>void collect('advanceItem',{itemId:i.id,nextStatus:itemNext(i.fulfillment_status)})}>{i.fulfillment_status==='received'?'Start Preparing':i.fulfillment_status==='preparing'?'Mark Ready':'Mark Served'}</button>}</div>
+     {o.billing_mode==='open_bill'&&o.billing_status==='open'&&o.payment_status==='pending'&&i.fulfillment_status==='received'&&<button type="button" disabled={busy} className="mr-4 mt-2 text-xs font-bold text-sky-800 underline" onClick={()=>{setEditing({orderId:o.id,itemId:i.id});setEditRequest(crypto.randomUUID());setSizeName(i.size_name||'');setAddonIds(i.order_item_addons.map(a=>a.addon_id));void loadMenu(o);}}>Edit Item</button>}
      {o.billing_mode==='open_bill'&&o.billing_status==='open'&&i.fulfillment_status==='received'&&<button disabled={busy} className="mt-2 text-xs font-semibold text-red-700 underline" onClick={()=>{const reason=window.prompt('Reason for cancelling this unprepared item?');if(reason)void collect('cancelItem',{itemId:i.id,reason});}}>Cancel item</button>}
     </div>)}</div>
    <footer className="flex flex-wrap gap-2 border-t border-zinc-100 bg-[#fafbf9] p-4">
@@ -108,6 +114,17 @@ export default function LiveOrders(){
     {o.billing_mode==='open_bill'&&o.billing_status==='settlement_in_progress'&&<button className={primary} onClick={()=>{setSelected(o.id);setAdding(false);}}>Continue Settlement</button>}
     {o.billing_mode==='pay_first'&&o.payment_status==='pending'&&<button className={primary} onClick={()=>{setSelected(o.id);setAdding(false);}}>Collect Payment</button>}
    </footer></article>)}</div>}
+  {editing&&editOrder&&editItem&&<div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label="Edit item">
+    <div className="max-h-[90dvh] w-full max-w-lg space-y-4 overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl">
+      <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-emerald-700">{editOrder.order_number}</p><h3 className="text-xl font-bold">Edit {label(editItem.products)}</h3><p className="mt-1 text-sm text-zinc-500">Changes are repriced before preparation. The original item stays in the audit trail.</p></div><button type="button" className={secondary} onClick={()=>setEditing(null)}>Close</button></div>
+      {!editProduct?<p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Loading available sizes and add-ons, or this product is no longer available.</p>:<>
+        {editProduct.sizes.length>0?<label className="block text-sm font-semibold">Size<select className="mt-2 w-full rounded-xl border p-3" value={sizeName} onChange={e=>{setSizeName(e.target.value);setAddonIds([]);}}>{editProduct.sizes.map(s=><option key={s.name} value={s.name}>{s.name}</option>)}</select></label>:<p className="text-sm text-zinc-500">Standard size</p>}
+        <div className="space-y-2"><p className="text-sm font-semibold">Add-ons</p>{editAddons.length===0?<p className="text-xs text-zinc-500">No add-ons available for this size.</p>:editAddons.map(a=><label key={a.id} className="flex items-center gap-3 rounded-xl border p-3 text-sm"><input type="checkbox" checked={addonIds.includes(a.id)} onChange={e=>setAddonIds(v=>e.target.checked?[...v,a.id]:v.filter(x=>x!==a.id))}/>{a.name}</label>)}</div>
+        <button type="button" className={primary+' w-full'} disabled={busy} onClick={()=>void (async()=>{const result=await collect('editItem',{itemId:editItem.id,requestId:editRequest,sizeName:sizeName||null,addonIds});if(result){setEditing(null);setAddonIds([]);}})()}>Save Changes</button>
+      </>}
+      {error&&<p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+    </div>
+  </div>}
   {addToBill&&(()=>{const o=orders.find(x=>x.id===addToBill);return o&&o.billing_mode==='open_bill'&&o.billing_status==='open'&&o.payment_status==='pending'?<CounterPOS key={o.id} menuId={o.event_id} menuName="Add Products" trackedIds={[]} paymentSettings={null} businessName="BeanBook" existingBill={{id:o.id,number:o.order_number,customerName:label(o.customers),customerPhone:customerPhone(o.customers)}} onClose={()=>{setAddToBill(null);void refresh().catch(()=>{});}}/>:null;})()}
   {chosen&&<div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label={adding?'Add Items':'Settle Bill'}>
    <div className="flex max-h-[95dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
