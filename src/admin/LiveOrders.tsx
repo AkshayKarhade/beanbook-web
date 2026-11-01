@@ -18,7 +18,7 @@ const elapsed=(s:string,now:number)=>{const m=Math.max(0,Math.floor((now-Date.pa
 async function request(body?:Record<string,unknown>){
  const auth=await adminSupabase?.auth.getSession();const token=auth?.data.session?.access_token;
  if(!token)throw new Error('Sign in again to view orders.');
- const r=await fetch('/api/business-orders',{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
+ const r=await fetch('/api/business-products?mode=orders',{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});
  const result=await r.json().catch(()=>null);
  if(!r.ok)throw new Error(result?.error||'Order request failed (HTTP '+r.status+')');
  return result;
