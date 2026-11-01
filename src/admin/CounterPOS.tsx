@@ -29,6 +29,7 @@ export default function CounterPOS({
  const [cart,setCart]=useState<Line[]>([]),[cartOpen,setCartOpen]=useState(false);
  const [orderNumber,setOrderNumber]=useState(''),[amount,setAmount]=useState<number|null>(null);
  const [billingMode,setBillingMode]=useState<'pay_first'|'open_bill'>('pay_first');
+ const [defaultBillingMode,setDefaultBillingMode]=useState<'pay_first'|'open_bill'>('pay_first');
  const [requestId,setRequestId]=useState(()=>crypto.randomUUID());
  const [paymentMethod,setPaymentMethod]=useState<'upi'|'cash'>('upi'),[reference,setReference]=useState(''),[paid,setPaid]=useState(false);
 
@@ -57,7 +58,7 @@ export default function CounterPOS({
       setAddonPrices(optionsBody.prices||[]);
       setLinks(optionsBody.links||[]);
       const billingResponse=await fetch('/api/business-products?mode=orders',{headers:{Authorization:'Bearer '+token},signal:controller.signal});
-      if(billingResponse.ok){const bill=await billingResponse.json();setBillingMode(bill.billingMode==='open_bill'?'open_bill':'pay_first');}
+      if(billingResponse.ok){const bill=await billingResponse.json();setDefaultBillingMode(bill.billingMode==='open_bill'?'open_bill':'pay_first');setBillingMode(bill.billingMode==='open_bill'?'open_bill':'pay_first');}
     }
    }catch(e){if(active)setError(e instanceof Error?e.message:'Unable to load menu');}
    finally{if(active)setLoading(false);}
@@ -135,7 +136,7 @@ export default function CounterPOS({
   setBusy(true);setError('');
   try{
    const response=await authedPost({
-    action:'create',requestId,menuId,customerName:name.trim(),customerPhone:phone,
+    action:'create',requestId,billingMode,menuId,customerName:name.trim(),customerPhone:phone,
     items:cart.map(l=>({product_id:l.product_id,size_name:l.size_name,quantity:l.quantity,addon_ids:l.addon_ids}))
    });
    const receipt=response.result;
@@ -157,7 +158,7 @@ export default function CounterPOS({
   finally{setBusy(false);}
  }
  function newSale(){
-  setRequestId(crypto.randomUUID());setName('');setPhone('+91');setCart([]);setQuery('');setCategory('All');setOrderNumber('');setAmount(null);setReference('');setPaid(false);setPaymentMethod(paymentSettings?'upi':'cash');setError('');setStage('customer');
+  setRequestId(crypto.randomUUID());setBillingMode(defaultBillingMode);setName('');setPhone('+91');setCart([]);setQuery('');setCategory('All');setOrderNumber('');setAmount(null);setReference('');setPaid(false);setPaymentMethod(paymentSettings?'upi':'cash');setError('');setStage('customer');
  }
  const renderCart=(mobile:boolean)=><div className="flex h-full flex-col bg-white">
   <div className="flex items-center justify-between gap-3 border-b border-[#eeeae4] px-5 py-4">
@@ -222,7 +223,7 @@ export default function CounterPOS({
        <label className="block space-y-2 text-sm font-semibold">Phone number <span className="text-red-700">*</span><input type="tel" inputMode="tel" autoComplete="tel" required className={input} value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+919876543210" /></label>
        <label className="block space-y-2 text-sm font-semibold">Customer name <span className="text-red-700">*</span><input type="text" autoComplete="name" required minLength={2} maxLength={120} className={input} value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Rahul" /></label>
        <button type="submit" className={primary+' flex w-full items-center justify-center gap-3'}>Continue to Menu <span aria-hidden="true">→</span></button>
-       <p className="rounded-lg bg-[#eef4ed] p-3 text-sm font-semibold text-[#2e543a]">{billingMode==='open_bill'?'Open Bill · Pay Later':'Pay First · Payment before preparation'}</p><p className="text-xs leading-5 text-zinc-500">Details are used for the business's order record. No customer account required.</p>
+       <fieldset className="rounded-2xl border border-[#dce6da] bg-[#f7faf6] p-4"><legend className="px-2 text-sm font-bold">Payment timing for this bill</legend><div className="grid grid-cols-2 gap-3">{([['pay_first','Pay First','Pay before preparing'],['open_bill','Pay Later','Keep bill open']] as const).map(([value,title,detail])=><button key={value} type="button" aria-pressed={billingMode===value} onClick={()=>{setBillingMode(value);setRequestId(crypto.randomUUID());}} className={'rounded-xl border-2 p-3 text-left '+(billingMode===value?'border-[#29583b] bg-[#e5f2e7]':'border-zinc-200 bg-white')}><strong className="block text-sm">{title}</strong><span className="block text-xs text-zinc-600">{detail}</span></button>)}</div><p className="mt-2 text-xs text-zinc-500">The selection applies to this order only.</p></fieldset><p className="text-xs leading-5 text-zinc-500">Details are used for the business's order record. No customer account required.</p>
       </form>
      </div>
     </div>}
@@ -233,7 +234,7 @@ export default function CounterPOS({
        <div className="flex items-center gap-3"><CounterIcon>👤</CounterIcon><div><p className="text-sm font-bold">{name.trim()}</p><p className="text-xs text-zinc-500">{phone}</p></div></div>
        <button type="button" onClick={()=>setStage('customer')} className="rounded-xl border border-[#e4e4db] px-4 py-2 text-sm font-semibold">Edit customer</button>
       </div>
-      <div className="mb-5"><h2 className="text-2xl font-bold sm:text-3xl">What can we get you?</h2><p className="mt-1 text-sm text-zinc-500">Choose a product and customize it for {name.trim()}.</p></div>
+      <div className="mb-5"><p className="mb-2 text-xs font-bold uppercase text-emerald-800">{billingMode==='open_bill'?'Pay Later · Open Bill':'Pay First · Close bill after payment'}</p><h2 className="text-2xl font-bold sm:text-3xl">What can we get you?</h2><p className="mt-1 text-sm text-zinc-500">Choose a product and customize it for {name.trim()}.</p></div>
       <label className="mb-5 flex items-center gap-3 rounded-2xl border border-[#e2e3dc] bg-white px-4 py-3 shadow-sm">
        <span className="text-xl text-[#65826f]" aria-hidden="true">⌕</span><input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search products…" className="min-w-0 flex-1 bg-transparent text-base outline-none" aria-label="Search products"/>
        {query&&<button type="button" className="text-sm text-zinc-500" onClick={()=>setQuery('')}>Clear</button>}
