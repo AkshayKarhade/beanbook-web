@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
-const uuid = (x: unknown): x is string => typeof x === 'string' && /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(x);
+const uuid = (x: unknown): x is string => typeof x === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(x);
 const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === 'object' && !Array.isArray(x);
 type Action = 'create' | 'addItems' | 'advanceItem' | 'cancelItem' | 'beginSettlement' | 'confirmPayment' | 'saveBillingMode';
 type Input = Record<string, unknown> & { action?: Action };
