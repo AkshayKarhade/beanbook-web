@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { adminBackendConfigured, adminSupabase } from './client';
 import LoginPanel from './LoginPanel';
 import ProductsPage from './ProductsPage';
+import MenusPage from './MenusPage';
+import BusinessPaymentSettings from './BusinessPaymentSettings';
 import { useBusinessSession } from './useBusinessSession';
 
 type Section = 'overview' | 'products' | 'orders' | 'events' | 'reports' | 'settings';
@@ -11,7 +13,7 @@ const nav: { id: Section; name: string; icon: string; step: number }[] = [
   { id: 'overview', name: 'Overview', icon: '◫', step: 1 },
   { id: 'products', name: 'Products', icon: '◈', step: 2 },
   { id: 'orders', name: 'Live Orders', icon: '▤', step: 4 },
-  { id: 'events', name: 'Events', icon: '▦', step: 5 },
+  { id: 'events', name: 'Events & Menus', icon: '▦', step: 3 },
   { id: 'reports', name: 'Reports', icon: '◩', step: 5 },
   { id: 'settings', name: 'Settings', icon: '⚙', step: 1 },
 ];
@@ -106,6 +108,7 @@ export default function BusinessWorkspace() {
 
           </div>
           {section==='products' && <ProductsPage />}
+          {section==='events' && <MenusPage />}
           {section==='overview' && <>
             <div className="grid gap-4 sm:grid-cols-3">
               {[['Your workspace','Connected','Business access verified'],['Operating locations','Coming in Step 3','Location-based ordering'],['Live order queue','Coming in Step 4','Real-time fulfillment']].map(([label,value,note])=><div key={label} className="rounded-2xl border border-[#e6e3dc] bg-white p-6 shadow-sm"><p className="text-sm text-zinc-500">{label}</p><p className="mt-3 text-xl font-semibold">{value}</p><p className="mt-2 text-xs text-zinc-400">{note}</p></div>)}
@@ -117,7 +120,8 @@ export default function BusinessWorkspace() {
               <button onClick={()=>setSection('settings')} className="mt-6 rounded-xl bg-[#1b2822] px-5 py-3 text-sm font-semibold text-white hover:bg-[#304438]">Manage business profile</button>
             </div>
           </>}
-          {section==='settings' && <div className="max-w-2xl rounded-3xl border border-[#e6e3dc] bg-white p-7 sm:p-9">
+          {section==='settings' && <div className="max-w-2xl">
+          <div className="rounded-3xl border border-[#e6e3dc] bg-white p-7 sm:p-9">
             <h3 className="text-xl font-semibold">Business profile</h3>
             <p className="mt-2 text-sm leading-6 text-zinc-500">Account identity and business ownership are configured centrally by the BeanBook Platform Administrator.</p>
             <div className="mt-7 space-y-4">
@@ -125,8 +129,10 @@ export default function BusinessWorkspace() {
               <div><p className="text-sm font-medium">Signed in as</p><p className="mt-1 text-zinc-700">{session.email} · {session.role}</p></div>
               <p className="rounded-xl bg-[#f5f3ef] px-4 py-3 text-xs leading-6 text-zinc-500">To change business account details, contact your BeanBook platform administrator.</p>
             </div>
+          </div>
+          <BusinessPaymentSettings />
           </div>}
-          {section!=='overview' && section!=='settings' && section!=='products' && <div className="rounded-3xl border border-dashed border-[#d5d7d0] bg-white p-10 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eff4ee] text-2xl">{current.icon}</div><h3 className="mt-5 text-xl font-semibold">{current.name} is coming in Step {current.step}</h3><p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-500">This is the shared navigation shell. The module will be built, tested, and enabled in its scheduled step. No dummy orders or fictional sales are displayed.</p></div>}
+          {section!=='overview' && section!=='settings' && section!=='products' && section!=='events' && <div className="rounded-3xl border border-dashed border-[#d5d7d0] bg-white p-10 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eff4ee] text-2xl">{current.icon}</div><h3 className="mt-5 text-xl font-semibold">{current.name} is coming in Step {current.step}</h3><p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-500">This is the shared navigation shell. The module will be built, tested, and enabled in its scheduled step. No dummy orders or fictional sales are displayed.</p></div>}
         </main>
       </div>
     </div>

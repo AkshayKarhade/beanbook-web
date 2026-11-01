@@ -1,0 +1,21 @@
+name: BeanBook PR Typecheck and Build
+on:
+  push:
+    branches: [feature/mvp1-events-regular-menus]
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npx tsc -b --pretty false
+      - name: Production build
+        run: npm run build
