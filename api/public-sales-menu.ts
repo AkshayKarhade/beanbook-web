@@ -11,7 +11,7 @@ export default async function publicMenu(req:Request){
   if(error)throw error;
   if(!menu)return Response.json({error:'Menu is not published'},{status:404});
   const {data:brand,error:be}=await db.from('brands').select('name').eq('id',menu.brand_id).single();if(be)throw be;
-  const {data:items,error:ie}=await db.from('event_products').select('id,product_id,price_override,display_order,products!inner(id,brand_id,name,description,price,is_active)').eq('event_id',menu.id).eq('is_available',true).eq('products.brand_id',menu.brand_id).eq('products.is_active',true).order('display_order');if(ie)throw ie;
+  const {data:items,error:ie}=await db.from('event_products').select('id,product_id,price_override,display_order,products!inner(id,brand_id,name,description,price,is_active,category)').eq('event_id',menu.id).eq('is_available',true).eq('products.brand_id',menu.brand_id).eq('products.is_active',true).order('display_order');if(ie)throw ie;
   const ids=(items||[]).map(x=>x.product_id);
   const assignmentIds=(items||[]).map(x=>x.id);
   const [sizes,overrides,images]=await Promise.all([
@@ -23,7 +23,7 @@ export default async function publicMenu(req:Request){
   const products=(items||[]).map(i=>{
    const p=Array.isArray(i.products)?i.products[0]:i.products;
    const productSizes=(sizes.data||[]).filter(s=>s.product_id===i.product_id).sort((a,b)=>a.display_order-b.display_order);
-   return {id:i.product_id,name:p.name,description:p.description,category:null,
+   return {id:i.product_id,name:p.name,description:p.description,category:p.category,
     price:productSizes.length?null:Number(i.price_override??p.price),
     sizes:productSizes.map(s=>({name:s.name,price:Number((overrides.data||[]).find(o=>o.event_product_id===i.id&&o.size_name===s.name)?.price??s.price)})),
     images:(images.data||[]).filter(image=>image.product_id===i.product_id).map(image=>db.storage.from('product-images').getPublicUrl(image.storage_path).data.publicUrl)
