@@ -1,5 +1,6 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {QRCodeCanvas} from 'qrcode.react';
+import {flushSync} from 'react-dom';
 import CounterPOS from './CounterPOS';
 import {adminSupabase} from './client';
 
@@ -39,6 +40,7 @@ export default function LiveOrders(){
  const [filter,setFilter]=useState<'active'|'history'>('active'),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [now,setNow]=useState(Date.now()),[loading,setLoading]=useState(true);
  const [addToBill,setAddToBill]=useState<string|null>(null);
+ const [printOrderId,setPrintOrderId]=useState<string|null>(null);
  const [editing,setEditing]=useState<{orderId:string;itemId:string}|null>(null),[editRequest,setEditRequest]=useState(()=>crypto.randomUUID());
  const [selected,setSelected]=useState<string|null>(null),[paymentMethod,setPaymentMethod]=useState<'cash'|'upi'>('cash'),[reference,setReference]=useState('');
  const [paymentSettings,setPaymentSettings]=useState<{upi_vpa:string;payee_name:string}|null>(null);
@@ -55,6 +57,9 @@ export default function LiveOrders(){
   return()=>{active=false;clearInterval(timer);clearInterval(poll);window.removeEventListener('focus',onFocus);};
  },[refresh]);
  const chosen=orders.find(o=>o.id===selected);
+ const printOrder=orders.find(o=>o.id===printOrderId);
+ const printBill=(orderId:string)=>{flushSync(()=>setPrintOrderId(orderId));window.print();};
+ useEffect(()=>{const onAfterPrint=()=>setPrintOrderId(null);window.addEventListener('afterprint',onAfterPrint);return()=>window.removeEventListener('afterprint',onAfterPrint);},[]);
  // Payment and fulfillment are independent: settlement must NEVER hide an unserved order.
  // Cancelled line items do not require preparation; empty/voided bills are NOT completed sales.
  const isServedAndPaid=(o:Order)=>o.payment_status==='paid'
@@ -110,11 +115,28 @@ export default function LiveOrders(){
      {o.billing_mode==='open_bill'&&o.billing_status==='open'&&o.payment_status==='pending'&&i.fulfillment_status==='received'&&<button type="button" disabled={busy} className="mr-4 mt-2 text-xs font-bold text-sky-800 underline" onClick={()=>{setEditing({orderId:o.id,itemId:i.id});setEditRequest(crypto.randomUUID());setSizeName(i.size_name||'');setAddonIds(i.order_item_addons.map(a=>a.addon_id));void loadMenu(o);}}>Edit Item</button>}
      {o.billing_mode==='open_bill'&&o.billing_status==='open'&&i.fulfillment_status==='received'&&<button disabled={busy} className="mt-2 text-xs font-semibold text-red-700 underline" onClick={()=>{const reason=window.prompt('Reason for cancelling this unprepared item?');if(reason)void collect('cancelItem',{itemId:i.id,reason});}}>Cancel item</button>}
     </div>)}</div>
-   <footer className="flex flex-wrap gap-2 border-t border-zinc-100 bg-[#fafbf9] p-4">
+   <footer className="flex flex-wrap gap-2 border-t border-zinc-100 bg-[#fafbf9] p-4"><button type="button" className={secondary} onClick={()=>printBill(o.id)}>Print Bill</button>
     {o.billing_mode==='open_bill'&&o.billing_status==='open'&&<><button className={secondary} disabled={busy} onClick={()=>{setAddToBill(o.id);void loadMenu(o);}}>+ Add Products</button><button className={primary} disabled={busy} onClick={()=>void begin(o)}>Settle Bill · {money(o.total_amount)}</button></>}
     {o.billing_mode==='open_bill'&&o.billing_status==='settlement_in_progress'&&<button className={primary} onClick={()=>{setSelected(o.id);setAdding(false);}}>Continue Settlement</button>}
     {o.billing_mode==='pay_first'&&o.payment_status==='pending'&&<button className={primary} onClick={()=>{setSelected(o.id);setAdding(false);}}>Collect Payment</button>}
    </footer></article>)}</div>}
+  {printOrder&&<div id="bb-print-receipt" aria-label="Printable bill">
+    <div className="receipt-center receipt-heading">BeanBook · Customer Bill</div>
+    <div className="receipt-center">{printOrder.order_number}</div>
+    <div className="receipt-rule" />
+    <div>Customer: {label(printOrder.customers)}</div>
+    <div>Placed: {new Date(printOrder.created_at).toLocaleString('en-IN')}</div>
+    <div>Status: {printOrder.payment_status==='paid'?'PAID':'UNPAID - PAYMENT DUE'}</div>
+    <div className="receipt-rule" />
+    {printOrder.order_items.filter(i=>i.fulfillment_status!=='cancelled').map(i=><div key={i.id} className="receipt-line">
+      <div>{i.quantity} × {label(i.products)}{i.size_name?' ('+i.size_name+')':''}</div>
+      {i.order_item_addons?.length>0&&<div className="receipt-subline">{i.order_item_addons.map(a=>a.addon_name).join(', ')}</div>}
+      <div className="receipt-right">{money(Number(i.unit_price)*i.quantity)}</div>
+    </div>)}
+    <div className="receipt-rule" />
+    <div className="receipt-total"><span>ORDER TOTAL</span><strong>{money(printOrder.total_amount)}</strong></div>
+    <div className="receipt-center receipt-footer">Thank you for your order!</div>
+  </div>}
   {editing&&editOrder&&editItem&&<div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label="Edit item">
     <div className="max-h-[90dvh] w-full max-w-lg space-y-4 overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl">
       <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-emerald-700">{editOrder.order_number}</p><h3 className="text-xl font-bold">Edit {label(editItem.products)}</h3><p className="mt-1 text-sm text-zinc-500">Changes are repriced before preparation. The original item stays in the audit trail.</p></div><button type="button" className={secondary} onClick={()=>setEditing(null)}>Close</button></div>
