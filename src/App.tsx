@@ -23,6 +23,8 @@ function App() {
 
   if (isActivate) return <ActivationPage />;
 
+  if (window.location.pathname === '/') return <Home />;
+
   if (isPlatform) {
     return <PlatformAdminPage />;
   }
