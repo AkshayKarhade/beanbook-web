@@ -1,0 +1,3 @@
+-- Initialize first-round items before setting workflow_version=2.
+-- This is applied to MVP Supabase as migration mvp1_counter_order_initialization_before_guard.
+-- See companion v4 function definition in 20261101143000_mvp1_bill_level_payment_choices.sql.
