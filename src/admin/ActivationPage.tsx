@@ -47,6 +47,9 @@ export default function ActivationPage() {
           .eq('id', membership.brand_id)
           .single();
         if (brandError) throw brandError;
+        const { data: invitation, error: invitationError } = await adminSupabase.from('business_invitations').select('status').eq('brand_id', membership.brand_id).eq('auth_user_id', auth.user.id).maybeSingle();
+        if (invitationError) throw invitationError;
+        if (invitation?.status === 'activated') { navigate('/admin', { replace: true }); return; }
         if (active) { setAccount({ email: auth.user.email || '', business: brand.name, role: 'owner' }); setError(''); setLoading(false); }
       } catch (err) {
         if (active) {
@@ -61,7 +64,7 @@ export default function ActivationPage() {
       window.setTimeout(() => { if (active) void load(); }, 0);
     }) || { data: undefined };
     return () => { active = false; subscription?.subscription.unsubscribe(); };
-  }, []);
+  }, [navigate]);
 
   async function activate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
