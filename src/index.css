@@ -42,6 +42,13 @@ body {
   font: 11px/1.4 Arial, sans-serif;
   overflow-wrap: anywhere;
 }
+#bb-print-receipt.bb-receipt-measure {
+  display: block;
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  visibility: hidden;
+}
 .receipt-center { text-align: center; }
 .receipt-heading { font-size: 14px; font-weight: bold; }
 .receipt-rule { border-top: 1px dashed black; margin: 7px 0; }
