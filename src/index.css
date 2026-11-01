@@ -30,3 +30,30 @@ body {
   :where(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]) { transition: none; }
   :where(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]).bb-click-feedback { animation: none; filter: brightness(0.88); outline: 2px solid #5b9d72; }
 }
+
+/* Receipt is invisible in the order dashboard until the browser print workflow. */
+#bb-print-receipt { display: none; }
+@media print {
+  @page { size: 58mm auto; margin: 3mm; }
+  body * { visibility: hidden !important; }
+  #bb-print-receipt, #bb-print-receipt * { visibility: visible !important; }
+  #bb-print-receipt {
+    display: block !important;
+    position: absolute;
+    top: 0; left: 0;
+    width: 52mm;
+    padding: 0;
+    background: white;
+    color: black;
+    font: 11px/1.45 Arial, sans-serif;
+    overflow-wrap: anywhere;
+  }
+  .receipt-center { text-align: center; }
+  .receipt-heading { font-size: 14px; font-weight: bold; }
+  .receipt-rule { border-top: 1px dashed black; margin: 7px 0; }
+  .receipt-line { margin: 6px 0; break-inside: avoid; }
+  .receipt-subline { font-size: 10px; margin-left: 10px; }
+  .receipt-right { text-align: right; }
+  .receipt-total { display: flex; justify-content: space-between; gap: 5px; font-size: 13px; font-weight: bold; }
+  .receipt-footer { margin-top: 12px; }
+}
