@@ -19,8 +19,8 @@ const primary='rounded-2xl bg-[#1b2822] px-5 py-3.5 font-semibold text-white tra
 function CounterIcon({children}:{children:ReactNode}){return <span aria-hidden="true" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#edf2ed] text-xl text-[#2a4432]">{children}</span>;}
 
 export default function CounterPOS({
- menuId,menuName,trackedIds,paymentSettings,businessName,onClose,existingBill
-}:{menuId:string;menuName:string;trackedIds:string[];paymentSettings:Payment;businessName:string;onClose:()=>void;existingBill?:ExistingBill}){
+ menuId,menuName,trackedIds,paymentSettings,businessName,onClose,existingBill,onSaveUnpaid
+}:{menuId:string;menuName:string;trackedIds:string[];paymentSettings:Payment;businessName:string;onClose:()=>void;existingBill?:ExistingBill;onSaveUnpaid?:()=>void}){
  const [stage,setStage]=useState<Stage>(existingBill?'menu':'customer');
  const [phone,setPhone]=useState(existingBill?.customerPhone||'+91'),[name,setName]=useState(existingBill?.customerName||'');
  const [products,setProducts]=useState<Product[]>([]),[addons,setAddons]=useState<Addon[]>([]),[addonPrices,setAddonPrices]=useState<AddonPrice[]>([]),[links,setLinks]=useState<Link[]>([]);
@@ -307,7 +307,7 @@ export default function CounterPOS({
          </div>
         </section>
        </div>}
-      {!paid&&billingMode==='pay_first'&&<div className="text-center"><button type="button" onClick={exit} className="rounded-xl border border-[#deded7] bg-white px-5 py-3 text-sm font-semibold">Exit and leave order pending</button></div>}
+      {!paid&&billingMode==='pay_first'&&<div className="text-center"><button type="button" onClick={()=>{if(window.confirm('This order is saved as unpaid. Preparation stays blocked until payment is collected. Return to Live Orders?'))(onSaveUnpaid??onClose)();}} className="rounded-xl border border-[#deded7] bg-white px-5 py-3 text-sm font-semibold">Save as Unpaid & Return to Orders</button></div>}
      </div>
     </div>}
    {selected&&<div className="fixed inset-0 z-[140] flex items-end justify-center bg-black/60 sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label={'Customize '+selected.name}>
