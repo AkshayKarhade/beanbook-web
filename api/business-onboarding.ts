@@ -51,7 +51,7 @@ export default async function businessOnboarding(request: Request) {
       return json({ error: 'Business Admin privileges required.' }, 403);
     }
     const { data: invitation, error: invitationError } = await admin.from('business_invitations')
-      .select('id,brand_id,auth_user_id,email,status,confirmation_started_at')
+      .select('id,brand_id,auth_user_id,email,status,confirmation_started_at,pilot_tier')
       .eq('brand_id', membership.brand_id).eq('auth_user_id', user.id).maybeSingle();
     if (invitationError) throw invitationError;
     if (!invitation || invitation.email.toLowerCase() !== user.email.toLowerCase()) {
@@ -115,13 +115,18 @@ export default async function businessOnboarding(request: Request) {
     const destination = new URL('/beanbook/admin', request.url).toString();
     const businessName = safe(brand.name);
     const roleLabel = safe(BUSINESS_ADMIN_ROLE_LABEL);
+    const tierNames: Record<string, string> = { base: 'Base', growth: 'Growth', complete: 'Complete' };
+    const tierPrices: Record<string, number> = { base: 499, growth: 999, complete: 1499 };
+    const tierName = tierNames[invitation.pilot_tier] || 'Pilot';
+    const pilotSaving = (tierPrices[invitation.pilot_tier] || 0) * 2;
+    const pilotCelebration = pilotSaving ? '<p style="background:#f1e7dd;padding:16px;border-radius:12px"><strong>Your selected plan: ' + tierName + '</strong><br/>🎁 Your complimentary 60-day pilot represents ₹' + pilotSaving.toLocaleString('en-IN') + ' in savings per login user at the indicative monthly price. No automatic subscription is started.</p>' : '';
     const html = '<div style="max-width:620px;margin:0 auto;padding:24px;font-family:Arial,sans-serif;color:#1b2822">' +
       '<p style="color:#17704e;letter-spacing:2px;font-weight:700">BEANBOOK</p>' +
       '<div style="background:#f1f6ef;border-radius:20px;padding:28px">' +
       '<p style="font-size:38px;margin:0">🎉</p>' +
       '<h1 style="font-size:28px;margin:12px 0">You\'re officially on BeanBook!</h1>' +
       '<p style="font-size:17px">Welcome aboard! Your Business Admin account for <strong>' + businessName + '</strong> is now active.</p>' +
-      '</div><h2>Everything is ready for your first steps</h2>' +
+      '</div>' + pilotCelebration + '<h2>Everything is ready for your first steps</h2>' +
       '<p>You\'ve created your password and accessed your business dashboard. That\'s a milestone worth celebrating!</p>' +
       '<p><strong>Business:</strong> ' + businessName + '<br/><strong>Your role:</strong> ' + roleLabel + '</p>' +
       '<p>Your workspace is now yours to explore. As BeanBook grows, you\'ll be able to manage products, orders, team access and reporting in one place.</p>' +
