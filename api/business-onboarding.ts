@@ -118,8 +118,8 @@ export default async function businessOnboarding(request: Request) {
     const tierNames: Record<string, string> = { base: 'Base', growth: 'Growth', complete: 'Complete' };
     const tierPrices: Record<string, number> = { base: 499, growth: 999, complete: 1499 };
     const tierName = tierNames[invitation.pilot_tier] || 'Pilot';
-    const pilotSaving = (tierPrices[invitation.pilot_tier] || 0) * 2;
-    const pilotCelebration = pilotSaving ? '<p style="background:#f1e7dd;padding:16px;border-radius:12px"><strong>Your selected plan: ' + tierName + '</strong><br/>🎁 Your complimentary 60-day pilot represents ₹' + pilotSaving.toLocaleString('en-IN') + ' in savings per login user at the indicative monthly price. No automatic subscription is started.</p>' : '';
+    const pilotSaving = (tierPrices[invitation.pilot_tier] || 0) * 3;
+    const pilotCelebration = pilotSaving ? '<p style="background:#f1e7dd;padding:16px;border-radius:12px"><strong>Your selected plan: ' + tierName + '</strong><br/>🎁 Your complimentary 3-month pilot represents ₹' + pilotSaving.toLocaleString('en-IN') + ' in savings per login user at the indicative monthly price. No automatic subscription is started.</p>' : '';
     const html = '<div style="max-width:620px;margin:0 auto;padding:24px;font-family:Arial,sans-serif;color:#1b2822">' +
       '<p style="color:#17704e;letter-spacing:2px;font-weight:700">BEANBOOK</p>' +
       '<div style="background:#f1f6ef;border-radius:20px;padding:28px">' +
