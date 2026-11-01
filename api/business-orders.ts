@@ -24,7 +24,7 @@ export default async function businessOrders(req: Request) {
       const settings = await db.from('business_billing_settings').select('billing_mode').eq('brand_id', brandId).maybeSingle();
       if (settings.error) throw settings.error;
       const orders = await db.from('orders')
-        .select('id,order_number,event_id,customer_id,total_amount,created_at,payment_status,paid_at,billing_mode,billing_status,workflow_version,order_status,order_channel,customers(name),order_items(id,product_id,quantity,unit_price,size_name,fulfillment_status,round_number,cancelled_at,products(name),order_item_addons(addon_name,unit_price))')
+        .select('id,order_number,event_id,customer_id,total_amount,created_at,payment_status,paid_at,billing_mode,billing_status,workflow_version,order_status,order_channel,customers(name,phone),order_items(id,product_id,quantity,unit_price,size_name,fulfillment_status,round_number,cancelled_at,prep_started_at,prep_ready_at,products(name),order_item_addons(addon_name,unit_price))')
         .eq('brand_id', brandId).eq('workflow_version', 2)
         .order('created_at', { ascending: false }).limit(150);
       if (orders.error) throw orders.error;
