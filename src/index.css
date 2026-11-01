@@ -74,3 +74,34 @@ body {
     page-break-inside: avoid;
   }
 }
+
+/* BeanBook marketing-site palette, scoped to the authenticated workspace only.
+   No layout, state, event handlers, checkout, or receipt changes. */
+.bb-app-theme {
+  --bb-walnut: #4a3026;
+  --bb-cream: #faf7f2;
+  --bb-ivory: #fffdf9;
+  --bb-caramel: #a97855;
+  --bb-sand: #f1e7dd;
+  --bb-border: #e9dcd0;
+  background: var(--bb-cream);
+  color: #39291f;
+}
+.bb-app-theme > aside { background: var(--bb-walnut); border-color: #725445; }
+.bb-app-theme > aside nav button[aria-current="page"] { background: #ffffff26; color: #fffdf9; }
+.bb-app-theme > aside nav button:not([aria-current="page"]) { color: #e7d5c9; }
+.bb-app-theme > aside nav button:not([aria-current="page"]):hover { background: #ffffff18; color: white; }
+.bb-app-theme main [class*="bg-white"] { background-color: var(--bb-ivory); }
+.bb-app-theme main [class*="bg-[#f5f3ef]"],
+.bb-app-theme main [class*="bg-[#f4f7f2]"],
+.bb-app-theme main [class*="bg-[#fafbf9]"] { background-color: #f5ece3; }
+.bb-app-theme main [class*="border-[#e6e3dc]"],
+.bb-app-theme main [class*="border-[#e4e9e0]"] { border-color: var(--bb-border); }
+.bb-app-theme main button[class*="bg-[#1b2822]"],
+.bb-app-theme main button[class*="bg-zinc-900"] { background-color: var(--bb-walnut); color: white; }
+.bb-app-theme main button[class*="bg-[#1b2822]"]:hover:not(:disabled),
+.bb-app-theme main button[class*="bg-zinc-900"]:hover:not(:disabled) { background-color: #654639; }
+.bb-app-theme main button[class*="bg-white"] { background-color: #fff9f2; }
+.bb-app-theme main [class*="text-[#6b8974]"],
+.bb-app-theme main [class*="text-[#688b75]"] { color: #946b50; }
+.bb-app-theme :is(button,input,select,textarea):focus-visible { outline-color: var(--bb-caramel); }
