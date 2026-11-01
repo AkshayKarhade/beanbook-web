@@ -56,7 +56,7 @@ export default function CounterPOS({
       setAddons(optionsBody.addons||[]);
       setAddonPrices(optionsBody.prices||[]);
       setLinks(optionsBody.links||[]);
-      const billingResponse=await fetch('/api/business-orders',{headers:{Authorization:'Bearer '+token},signal:controller.signal});
+      const billingResponse=await fetch('/api/business-products?mode=orders',{headers:{Authorization:'Bearer '+token},signal:controller.signal});
       if(billingResponse.ok){const bill=await billingResponse.json();setBillingMode(bill.billingMode==='open_bill'?'open_bill':'pay_first');}
     }
    }catch(e){if(active)setError(e instanceof Error?e.message:'Unable to load menu');}
@@ -122,7 +122,7 @@ export default function CounterPOS({
   const auth=await adminSupabase?.auth.getSession();
   const token=auth?.data.session?.access_token;
   if(!token)throw new Error('Your session expired. Sign in again.');
-  const response=await fetch('/api/business-orders',{
+  const response=await fetch('/api/business-products?mode=orders',{
     method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)
   });
   const result=await response.json().catch(()=>null);
