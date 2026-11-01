@@ -15,7 +15,6 @@ const input='w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm
 const action='rounded-xl bg-[#1b2822] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50';
 const blank:Data={paymentSettings:null,businessName:'',menus:[],items:[],sizes:[],overrides:[],products:[]};
 export default function MenusPage(){
- const [upi,setUpi]=useState(''),[payee,setPayee]=useState('');
  const [data,setData]=useState<Data>(blank),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const [kind,setKind]=useState<'regular'|'event'>('regular'),[name,setName]=useState(''),[location,setLocation]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
  const qrRef=useRef<HTMLDivElement>(null);
@@ -33,7 +32,7 @@ export default function MenusPage(){
   const body=await res.json();if(!res.ok)throw new Error(body.error||'Could not manage menu');
   return body;
  },[]);
- const reload=useCallback(async()=>{const d=await request();setData(d);setUpi(d.paymentSettings?.upi_vpa||'');setPayee(d.paymentSettings?.payee_name||'');},[request]);
+ const reload=useCallback(async()=>{const d=await request();setData(d);},[request]);
  useEffect(()=>{void reload().catch(e=>setError(e instanceof Error?e.message:String(e)));},[reload]);
  const open=(menu:Menu)=>{
   setSelected(menu.id);setError('');setMessage('');
@@ -66,7 +65,6 @@ export default function MenusPage(){
    await reload();setMessage(selectedMenu.status==='published'?'Published menu updated; existing URL and QR remain valid.':'Draft menu saved. Review products and publish to activate its public URL and QR code.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
  }
- async function saveUPI(){setBusy(true);setError('');try{await request({action:'savePaymentSettings',upiVpa:upi,payeeName:payee});await reload();setMessage('Business UPI details saved.');}catch(e){setError(e instanceof Error?e.message:'Could not save UPI details');}finally{setBusy(false);}}
  async function deleteMenu(menu:Menu){
   if(!window.confirm('Remove "'+menu.name+'"? Its QR link will stop working. Previous orders remain in history.'))return;
   setBusy(true);setError('');setMessage('');
@@ -147,7 +145,6 @@ export default function MenusPage(){
     <p className="text-xs text-amber-800">{selectedMenu.status==='published'?'Changes take effect immediately. Existing paid orders retain their charged prices.':'Save changes before publishing.'}</p>
    </>:<p className="text-sm text-zinc-500">Menu cannot be edited in its current state.</p>}
    </div>}
-  <section className="space-y-3 rounded-2xl border bg-white p-5"><h4 className="font-semibold">Business UPI Payments</h4><p className="text-sm text-zinc-500">Used for exact-amount counter QR payments. Verify these details against the café’s real receiving account.</p><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">UPI ID<input className={input+' mt-1'} placeholder="cafe@bank" value={upi} onChange={e=>setUpi(e.target.value)}/></label><label className="text-sm">Account / Payee name<input className={input+' mt-1'} value={payee} onChange={e=>setPayee(e.target.value)}/></label></div><button type="button" disabled={busy} onClick={()=>void saveUPI()} className={action}>Save UPI Details</button></section>
   {posMenuId&&<CounterPOS key={posMenuId} businessName={data.businessName} menuId={posMenuId} menuName={data.menus.find(m=>m.id===posMenuId)?.name||'Menu'} paymentSettings={data.paymentSettings} trackedIds={data.items.filter(i=>i.event_id===posMenuId&&i.inventory_tracking).map(i=>i.product_id)} onClose={()=>setPosMenuId(null)}/>}
   {activatedMenu&&<section className="space-y-4 rounded-2xl border border-emerald-200 bg-white p-6" role="status">
     <div className="text-3xl" aria-hidden="true">✓</div><h3 className="text-xl font-semibold text-emerald-800">Menu activated successfully!</h3>
