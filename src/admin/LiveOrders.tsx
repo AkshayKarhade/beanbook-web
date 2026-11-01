@@ -45,8 +45,13 @@ export default function LiveOrders(){
   return()=>{active=false;clearInterval(timer);clearInterval(poll);window.removeEventListener('focus',onFocus);};
  },[refresh]);
  const chosen=orders.find(o=>o.id===selected);
- const active=useMemo(()=>orders.filter(o=>o.billing_status!=='settled'&&o.billing_status!=='voided'&&o.order_items.some(i=>i.fulfillment_status!=='cancelled'&&(i.fulfillment_status!=='completed'||o.payment_status!=='paid'))),[orders]);
- const history=useMemo(()=>orders.filter(o=>!active.some(a=>a.id===o.id)),[orders,active]);
+ // Payment and fulfillment are independent: settlement must NEVER hide an unserved order.
+ // Cancelled line items do not require preparation; empty/voided bills are NOT completed sales.
+ const isServedAndPaid=(o:Order)=>o.payment_status==='paid'
+   && o.order_items.some(i=>i.fulfillment_status!=='cancelled')
+   && o.order_items.every(i=>i.fulfillment_status==='completed'||i.fulfillment_status==='cancelled');
+ const active=useMemo(()=>orders.filter(o=>!isServedAndPaid(o)),[orders]);
+ const history=useMemo(()=>orders.filter(isServedAndPaid),[orders]);
  const shown=(filter==='active'?active:history).filter(o=>(o.order_number+' '+label(o.customers)).toLowerCase().includes(search.toLowerCase()));
  const collect=async(action:string,payload:Record<string,unknown>)=>{if(busy)return;setBusy(true);setError('');try{const result=await request({action,...payload});await refresh();return result;}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}};
  const itemNext=(s:Item['fulfillment_status'])=>s==='received'?'preparing':s==='preparing'?'ready':s==='ready'?'completed':null;
