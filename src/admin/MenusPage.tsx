@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useRef,useState,type FormEvent} from 'react';
 import {adminSupabase} from './client';
 import {QRCodeCanvas} from 'qrcode.react';
+import CounterPOS from './CounterPOS';
 import {downloadMenuQrCard,menuPublicUrl,isMenuPreview} from './menuQrCard';
 type Menu={id:string;name:string;slug:string;sales_mode:'regular'|'event';status:string;location:string|null;event_start_date:string|null;event_end_date:string|null};
 type Product={id:string;name:string;price:number;is_active:boolean};
@@ -20,6 +21,7 @@ export default function MenusPage(){
  const [downloading,setDownloading]=useState(false);
  const [tab,setTab]=useState<'regular'|'event'>('regular');
  const [activated,setActivated]=useState<string|null>(null);
+ const [posMenuId,setPosMenuId]=useState<string|null>(null);
  const [selected,setSelected]=useState<string|null>(null),[draft,setDraft]=useState<ItemDraft[]>([]),[showCreate,setShowCreate]=useState(false);
  const request=useCallback(async(payload?:Record<string,unknown>):Promise<Data&{menuId?:string;ok?:boolean}>=>{
   if(!adminSupabase)throw new Error('Business connection unavailable');
@@ -63,6 +65,13 @@ export default function MenusPage(){
    await reload();setMessage('Draft menu saved. Review products and publish to activate its public URL and QR code.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
  }
+ async function deleteMenu(menu:Menu){
+  if(!window.confirm('Remove "'+menu.name+'"? Its QR link will stop working. Previous orders remain in history.'))return;
+  setBusy(true);setError('');setMessage('');
+  try{await request({action:'deleteMenu',menuId:menu.id});setSelected(null);setActivated(null);setPosMenuId(null);await reload();setMessage(menu.name+' removed. Previous orders are preserved.');}
+  catch(e){setError(e instanceof Error?e.message:'Could not remove menu');}
+  finally{setBusy(false);}
+ }
  async function publish(){
   if(!selectedMenu||selectedMenu.status!=='draft')return;
   setBusy(true);setError('');setMessage('');
@@ -95,6 +104,10 @@ export default function MenusPage(){
      <p className="mt-2 text-sm text-zinc-500">{m.sales_mode==='regular'?'Regular Sales':'Event'} · {data.items.filter(i=>i.event_id===m.id).length} products</p>
      {m.event_start_date&&<p className="mt-1 text-xs text-zinc-500">{m.event_start_date} to {m.event_end_date}</p>}
     </button>)}</div>
+  <div className="grid gap-3 sm:grid-cols-2">{data.menus.filter(m=>m.sales_mode===tab).map(m=><div key={m.id} className="flex flex-wrap items-center gap-2 rounded-xl border bg-white p-3">
+   {m.status==='published'&&<><button type="button" className="rounded-lg bg-[#1b2822] px-3 py-2 text-sm font-semibold text-white" onClick={()=>{setPosMenuId(m.id);setActivated(null);setSelected(null);}}>Open Counter POS</button><button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={()=>{setPosMenuId(null);setActivated(m.id);setSelected(null);}}>View QR & Link</button></>}
+   <button type="button" disabled={busy} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-800 disabled:opacity-50" onClick={()=>void deleteMenu(m)}>Delete Menu</button>
+  </div>)}</div>
   {!data.menus.some(m=>m.sales_mode===tab)&&!showCreate&&<p className="rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-zinc-500">No menus in this section yet. Create a menu for a location or event; existing CRAG and Direct Sales flows are unchanged.</p>}
   {selectedMenu&&<div className="space-y-4 rounded-2xl border bg-white p-5">
     <div className="flex justify-between gap-3"><div><h4 className="text-lg font-semibold">{selectedMenu.name}</h4><p className="text-sm text-zinc-500">Draft menu editor · {selectedMenu.sales_mode==='regular'?'Product Library prices':'Optional event-specific prices'}</p></div><button type="button" onClick={()=>setSelected(null)} className="text-sm underline">Close</button></div>
@@ -120,6 +133,7 @@ export default function MenusPage(){
     <p className="text-xs text-amber-800">Save changes before publishing. Published menus are viewable, but checkout is not yet enabled.</p>
    </>:<p className="text-sm text-zinc-500">Only draft menus can be edited in this development slice.</p>}
    </div>}
+  {posMenuId&&<CounterPOS key={posMenuId} menuId={posMenuId} menuName={data.menus.find(m=>m.id===posMenuId)?.name||'Menu'} trackedIds={data.items.filter(i=>i.event_id===posMenuId&&i.inventory_tracking).map(i=>i.product_id)} onClose={()=>setPosMenuId(null)}/>}
   {activatedMenu&&<section className="space-y-4 rounded-2xl border border-emerald-200 bg-white p-6" role="status">
     <div className="text-3xl" aria-hidden="true">✓</div><h3 className="text-xl font-semibold text-emerald-800">Menu activated successfully!</h3>
     <p className="text-sm text-zinc-600">{activatedMenu.name} now has its own public link and QR code. You can print this QR for your customers.</p>
