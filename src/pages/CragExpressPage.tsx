@@ -9,6 +9,8 @@ type FridgeProduct = {
   quantity_on_hand: number;
 };
 
+type ReceiptLine = { id: string; name: string; quantity: number; unitPrice: number };
+
 type MenuResponse = {
   products: Array<{
     id: string;
@@ -50,6 +52,7 @@ export default function CragExpressPage() {
   const [isStarting, setIsStarting] = useState(false);
   const [stage, setStage] = useState<CheckoutStage>('menu');
   const [orderNumber, setOrderNumber] = useState('');
+  const [receiptLines, setReceiptLines] = useState<ReceiptLine[]>([]);
   const startingRef = useRef(false);
 
   useEffect(() => {
@@ -183,6 +186,7 @@ export default function CragExpressPage() {
         throw new Error('Payment checkout is unavailable. Please try again.');
       }
 
+      const checkoutLines = selectedProducts.map((product) => ({ id: product.id, name: product.name, quantity: quantities[product.id], unitPrice: product.price }));
       const checkout = new Razorpay({
         key: created.keyId,
         amount: created.amount,
@@ -192,6 +196,7 @@ export default function CragExpressPage() {
         order_id: created.razorpayOrderId,
         handler: (payment: RazorpayPaymentResponse) => {
           setOrderNumber(created.orderNumber);
+          setReceiptLines(checkoutLines);
           void verifyPayment(payment);
         },
         modal: {
@@ -222,7 +227,7 @@ export default function CragExpressPage() {
     const completed = stage === 'paid';
     const stockIssue = stage === 'paid_stock_issue';
     return (
-      <section className="mx-auto max-w-md py-12 text-center" role="status" aria-live="polite">
+      <section className="mx-auto max-w-md py-8 text-center" role="status" aria-live="polite">
         <div className="mb-5 text-5xl">{completed ? '✓' : '☕'}</div>
         <h1 className="text-2xl font-bold">
           {completed
@@ -241,6 +246,26 @@ export default function CragExpressPage() {
               ? 'Your payment is confirmed, but the fridge stock changed. Please show this screen at reception.'
               : 'Please keep this page open. Do not pay again while confirmation is pending.'}
         </p>
+        {receiptLines.length > 0 && (
+          <div className="mt-8 rounded-xl border border-gray-300 bg-white p-5 text-left text-gray-900 shadow-sm" aria-label="CRAG Studio bottle receipt">
+            <p className="text-xs font-bold uppercase tracking-widest text-gray-500">The 8th Coffee Bean · CRAG Studio</p>
+            <h2 className="mt-2 text-xl font-bold">Bottle verification receipt</h2>
+            <p className="mt-1 text-xs text-gray-500">Order {orderNumber}</p>
+            <div className="mt-5 border-y border-gray-200 py-3">
+              <div className="mb-2 flex justify-between text-xs font-semibold uppercase text-gray-500"><span>Drink / Quantity</span><span>Amount</span></div>
+              {receiptLines.map((line) => (
+                <div key={line.id} className="flex justify-between gap-3 py-2 text-sm">
+                  <span><strong>{line.quantity} × {line.name}</strong><span className="block text-xs text-gray-500">{currency(line.unitPrice)} each</span></span>
+                  <strong className="shrink-0">{currency(line.quantity * line.unitPrice)}</strong>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex justify-between font-bold"><span>Total · {receiptLines.reduce((n, line) => n + line.quantity, 0)} bottles</span><span>{currency(receiptLines.reduce((n, line) => n + line.quantity * line.unitPrice, 0))}</span></div>
+            <p className="mt-4 rounded-lg bg-gray-100 p-3 text-xs leading-5">
+              {completed ? 'Payment verified. Show this receipt to CRAG reception to match the bottles collected.' : stockIssue ? 'Payment verified, but stock needs staff attention. Please see reception before taking bottles.' : 'Payment verification pending. This is not proof of payment until confirmation succeeds.'}
+            </p>
+          </div>
+        )}
       </section>
     );
   }
