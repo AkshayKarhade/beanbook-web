@@ -1,7 +1,9 @@
 name: BeanBook PR Typecheck and Build
 on:
   push:
-    branches: [feature/mvp1-events-regular-menus]
+    branches: [feature/mvp1-events-regular-menus, feature/mvp1-customers-summary]
+  pull_request:
+    branches: [BeanBook-MVP-1]
   workflow_dispatch:
 jobs:
   verify:
