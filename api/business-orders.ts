@@ -47,9 +47,9 @@ export default async function businessOrders(req: Request) {
     let args: Record<string, unknown>;
     switch (input.action) {
       case 'create':
-        if (!uuid(input.menuId) || !uuid(input.requestId) || typeof input.customerName !== 'string' || typeof input.customerPhone !== 'string' || !Array.isArray(input.items)) return json({ error: 'Invalid order' }, 400);
-        functionName = 'beanbook_create_counter_order_v3';
-        args = { p_brand_id: brandId, p_menu_id: input.menuId, p_name: input.customerName, p_phone: input.customerPhone, p_items: input.items, p_actor: actor, p_request_id: input.requestId };
+        if (!uuid(input.menuId) || !uuid(input.requestId) || typeof input.customerName !== 'string' || typeof input.customerPhone !== 'string' || !Array.isArray(input.items) || !['pay_first','open_bill'].includes(String(input.billingMode))) return json({ error: 'Invalid order details or payment timing' }, 400);
+        functionName = 'beanbook_create_counter_order_v4';
+        args = { p_brand_id: brandId, p_menu_id: input.menuId, p_name: input.customerName, p_phone: input.customerPhone, p_items: input.items, p_actor: actor, p_request_id: input.requestId, p_billing_mode: input.billingMode };
         break;
       case 'addItems':
         if (!uuid(input.orderId) || !uuid(input.requestId) || !Array.isArray(input.items)) return json({ error: 'Invalid item addition' }, 400);
