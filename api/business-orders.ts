@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 const json = (value: unknown, status = 200) => Response.json(value, { status, headers: { 'Cache-Control': 'private, no-store' } });
 const uuid = (x: unknown): x is string => typeof x === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(x);
 const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === 'object' && !Array.isArray(x);
-type Action = 'create' | 'addItems' | 'advanceItem' | 'cancelItem' | 'beginSettlement' | 'confirmPayment' | 'saveBillingMode';
+type Action = 'create' | 'addItems' | 'advanceItem' | 'cancelItem' | 'editItem' | 'beginSettlement' | 'confirmPayment' | 'saveBillingMode';
 type Input = Record<string, unknown> & { action?: Action };
 
 export default async function businessOrders(req: Request) {
@@ -65,6 +65,11 @@ export default async function businessOrders(req: Request) {
         if (!uuid(input.itemId) || typeof input.reason !== 'string') return json({ error: 'Invalid cancellation' }, 400);
         functionName = 'beanbook_cancel_open_bill_item';
         args = { p_brand_id: brandId, p_order_item_id: input.itemId, p_actor: actor, p_reason: input.reason };
+        break;
+      case 'editItem':
+        if (!uuid(input.itemId) || !uuid(input.requestId) || !Array.isArray(input.addonIds) || (input.sizeName !== null && typeof input.sizeName !== 'string')) return json({ error: 'Invalid item edit' }, 400);
+        functionName = 'beanbook_edit_unprepared_bill_item';
+        args = { p_brand_id: brandId, p_order_item_id: input.itemId, p_actor: actor, p_request_id: input.requestId, p_size_name: input.sizeName ?? null, p_addon_ids: input.addonIds };
         break;
       case 'beginSettlement':
         if (!uuid(input.orderId)) return json({ error: 'Invalid order' }, 400);
