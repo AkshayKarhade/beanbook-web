@@ -120,7 +120,7 @@ export default function MenusPage({onReturnToLiveOrders}:{onReturnToLiveOrders:(
      </div>
     </article>)}
   </div>
-  {!data.menus.some(m=>m.sales_mode===tab)&&!showCreate&&<p className="rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-zinc-500">No menus in this section yet. Create a menu for a location or event; existing CRAG and Direct Sales flows are unchanged.</p>}
+  {!data.menus.some(m=>m.sales_mode===tab)&&!showCreate&&<p className="rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-zinc-500">No menus here yet. Create a menu for your location or upcoming event.</p>}
   {selectedMenu&&<div className="space-y-4 rounded-2xl border bg-white p-5">
     <div className="flex justify-between gap-3"><div><h4 className="text-lg font-semibold">{selectedMenu.name}</h4><p className="text-sm text-zinc-500">Draft menu editor · {selectedMenu.sales_mode==='regular'?'Product Library prices':'Optional event-specific prices'}</p></div><button type="button" onClick={()=>setSelected(null)} className="text-sm underline">Close</button></div>
     {['draft','published'].includes(selectedMenu.status)?<><p className="text-sm text-zinc-500">Select products for this menu. Each selected product can be tracked individually for inventory. For events, override only the prices that differ from the Product Library.</p>
