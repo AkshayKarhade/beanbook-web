@@ -1,10 +1,11 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {QRCodeCanvas} from 'qrcode.react';
+import CounterPOS from './CounterPOS';
 import {adminSupabase} from './client';
 
 type Addon={addon_name:string;unit_price:number|string};
-type Item={id:string;product_id:string;quantity:number;unit_price:number|string;size_name:string|null;fulfillment_status:'received'|'preparing'|'ready'|'completed'|'cancelled';round_number:number|null;products:{name:string}|{name:string}[]|null;order_item_addons:Addon[]};
-type Order={id:string;order_number:string;event_id:string;created_at:string;total_amount:number|string;payment_status:string;paid_at:string|null;billing_mode:'pay_first'|'open_bill';billing_status:'open'|'settlement_in_progress'|'settled'|'voided';order_items:Item[];customers:{name:string}|{name:string}[]|null};
+type Item={id:string;product_id:string;quantity:number;unit_price:number|string;size_name:string|null;prep_started_at:string|null;prep_ready_at:string|null;fulfillment_status:'received'|'preparing'|'ready'|'completed'|'cancelled';round_number:number|null;products:{name:string}|{name:string}[]|null;order_item_addons:Addon[]};
+type Order={id:string;order_number:string;event_id:string;created_at:string;total_amount:number|string;payment_status:string;paid_at:string|null;billing_mode:'pay_first'|'open_bill';billing_status:'open'|'settlement_in_progress'|'settled'|'voided';order_items:Item[];customers:{name:string;phone:string}|{name:string;phone:string}[]|null};
 type MenuProduct={id:string;name:string;price:number|null;sizes:{name:string;price:number}[]};
 type Opt={id:string;name:string;is_active:boolean};
 type OptionPrice={addon_id:string;size_name:string;price:number};
@@ -14,6 +15,8 @@ const money=(n:number|string)=>'₹'+Number(n).toLocaleString('en-IN',{minimumFr
 const primary='rounded-xl bg-[#1b2822] px-4 py-3 text-sm font-semibold text-white disabled:opacity-40';
 const secondary='rounded-xl border border-[#d7ded5] bg-white px-4 py-2.5 text-sm font-semibold text-[#233b2c] disabled:opacity-40';
 const label=(v:Item['products']|Order['customers'])=>Array.isArray(v)?v[0]?.name||'Walk-in customer':v?.name||'Walk-in customer';
+const clock=(start:string,finish:number)=>{const seconds=Math.max(0,Math.floor((finish-Date.parse(start))/1000));return [Math.floor(seconds/3600),Math.floor(seconds%3600/60),seconds%60].map(v=>String(v).padStart(2,'0')).join(':');};
+const customerPhone=(c:Order['customers'])=>(Array.isArray(c)?c[0]?.phone:c?.phone)||'';
 const elapsed=(s:string,now:number)=>{const m=Math.max(0,Math.floor((now-Date.parse(s))/60000));return m<1?'Just now':m<60?m+'m ago':m<1440?Math.floor(m/60)+'h '+m%60+'m ago':Math.floor(m/1440)+'d ago'};
 async function request(body?:Record<string,unknown>){
  const auth=await adminSupabase?.auth.getSession();const token=auth?.data.session?.access_token;
@@ -27,6 +30,7 @@ export default function LiveOrders(){
  const [orders,setOrders]=useState<Order[]>([]),[mode,setMode]=useState<'pay_first'|'open_bill'>('pay_first');
  const [filter,setFilter]=useState<'active'|'history'>('active'),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [now,setNow]=useState(Date.now()),[loading,setLoading]=useState(true);
+ const [addToBill,setAddToBill]=useState<string|null>(null);
  const [selected,setSelected]=useState<string|null>(null),[paymentMethod,setPaymentMethod]=useState<'cash'|'upi'>('cash'),[reference,setReference]=useState('');
  const [paymentSettings,setPaymentSettings]=useState<{upi_vpa:string;payee_name:string}|null>(null);
  const [adding,setAdding]=useState(false),[products,setProducts]=useState<MenuProduct[]>([]),[addons,setAddons]=useState<Opt[]>([]),[prices,setPrices]=useState<OptionPrice[]>([]),[allowed,setAllowed]=useState<Allowed[]>([]);
@@ -35,9 +39,10 @@ export default function LiveOrders(){
  const [search,setSearch]=useState('');
  const refresh=useCallback(async()=>{const d=await request();setOrders(d.orders||[]);setMode(d.billingMode==='open_bill'?'open_bill':'pay_first');setError('');setLoading(false);},[]);
  useEffect(()=>{let active=true;void refresh().catch(e=>{if(active){setError(e instanceof Error?e.message:String(e));setLoading(false);}});
-  const timer=window.setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});setNow(Date.now());},6000);
+  const timer=window.setInterval(()=>{setNow(Date.now());},1000);
+  const poll=window.setInterval(()=>{if(!document.hidden)void refresh().catch(()=>{});},6000);
   const onFocus=()=>{void refresh().catch(()=>{});};window.addEventListener('focus',onFocus);
-  return()=>{active=false;clearInterval(timer);window.removeEventListener('focus',onFocus);};
+  return()=>{active=false;clearInterval(timer);clearInterval(poll);window.removeEventListener('focus',onFocus);};
  },[refresh]);
  const chosen=orders.find(o=>o.id===selected);
  const active=useMemo(()=>orders.filter(o=>o.billing_status!=='settled'&&o.billing_status!=='voided'&&o.order_items.some(i=>i.fulfillment_status!=='cancelled'&&(i.fulfillment_status!=='completed'||o.payment_status!=='paid'))),[orders]);
@@ -75,17 +80,18 @@ export default function LiveOrders(){
   {error&&<p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</p>}
   {loading?<div className="rounded-2xl bg-white p-10 text-center text-zinc-500">Loading orders…</div>:shown.length===0?<div className="rounded-3xl border border-dashed border-[#d8ded5] bg-white p-10 text-center"><span className="text-4xl">☕</span><h3 className="mt-3 text-xl font-semibold">No {filter==='active'?'active orders':'completed orders'} yet</h3><p className="mt-2 text-sm text-zinc-500">Create a counter sale from Events & Menus. It will appear here automatically.</p></div>:
   <div className="grid items-start gap-4 xl:grid-cols-2">{shown.map(o=><article key={o.id} className="overflow-hidden rounded-3xl border border-[#e4e9e0] bg-white shadow-sm">
-   <header className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-100 p-5"><div><h3 className="text-lg font-bold">{o.order_number}</h3><p className="mt-1 text-sm text-zinc-600">{label(o.customers)} · {elapsed(o.created_at,now)}</p></div><div className="text-right"><strong className="text-xl">{money(o.total_amount)}</strong><p className="mt-1 text-xs text-zinc-500">{o.billing_mode==='open_bill'?'Open bill':'Pay first'} · {o.billing_status.replaceAll('_',' ')}</p><p className={'mt-1 text-xs font-semibold '+(o.payment_status==='paid'?'text-emerald-700':'text-amber-700')}>{o.payment_status==='paid'?'Paid':o.payment_status.replaceAll('_',' ')}</p></div></header>
+   <header className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-100 p-5"><div><h3 className="text-lg font-bold">{o.order_number}</h3><p className="mt-1 text-sm text-zinc-600">{label(o.customers)} · {elapsed(o.created_at,now)}</p><p className="mt-2 text-xs font-semibold tabular-nums text-[#31553b]">◷ Order Active Time: {clock(o.created_at,now)}</p></div><div className="text-right"><strong className="text-xl">{money(o.total_amount)}</strong><p className="mt-1 text-xs text-zinc-500">{o.billing_mode==='open_bill'?'Open bill':'Pay first'} · {o.billing_status.replaceAll('_',' ')}</p><p className={'mt-1 text-xs font-semibold '+(o.payment_status==='paid'?'text-emerald-700':'text-amber-700')}>{o.payment_status==='paid'?'Paid':o.payment_status.replaceAll('_',' ')}</p></div></header>
    <div className="space-y-3 p-5">{o.order_items.map(i=><div key={i.id} className={'rounded-2xl border p-3 '+(i.fulfillment_status==='cancelled'?'border-zinc-100 bg-zinc-50 opacity-60':'border-[#e5e9e2]')}>
      <div className="flex items-start justify-between gap-3"><div><p className="font-semibold">{i.quantity} × {label(i.products)}</p><p className="mt-1 text-xs text-zinc-500">{[i.size_name,i.order_item_addons?.map(a=>a.addon_name).join(', ')].filter(Boolean).join(' · ')||'Standard'} · Round {i.round_number||1}</p></div><strong className="text-sm">{money(Number(i.unit_price)*i.quantity)}</strong></div>
-     <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className="rounded-full bg-[#eef3ed] px-3 py-1 text-xs font-semibold capitalize text-[#31533b]">{i.fulfillment_status}</span>{itemNext(i.fulfillment_status)&&<button disabled={busy||o.payment_status==='paid_stock_issue'||(o.billing_mode==='pay_first'&&o.payment_status!=='paid')} className={secondary} onClick={()=>void collect('advanceItem',{itemId:i.id,nextStatus:itemNext(i.fulfillment_status)})}>{i.fulfillment_status==='received'?'Start Preparing':i.fulfillment_status==='preparing'?'Mark Ready':'Mark Served'}</button>}</div>
+     <div className="mt-2 text-xs font-semibold tabular-nums text-zinc-600">◷ Prep Time: {i.prep_started_at?clock(i.prep_started_at,i.prep_ready_at?Date.parse(i.prep_ready_at):now):'00:00:00'}{i.prep_ready_at?' · Finished':i.prep_started_at?' · Running':' · Not started'}</div><div className="mt-3 flex flex-wrap items-center justify-between gap-2"><span className="rounded-full bg-[#eef3ed] px-3 py-1 text-xs font-semibold capitalize text-[#31533b]">{i.fulfillment_status}</span>{itemNext(i.fulfillment_status)&&<button disabled={busy||o.payment_status==='paid_stock_issue'||(o.billing_mode==='pay_first'&&o.payment_status!=='paid')} className={secondary} onClick={()=>void collect('advanceItem',{itemId:i.id,nextStatus:itemNext(i.fulfillment_status)})}>{i.fulfillment_status==='received'?'Start Preparing':i.fulfillment_status==='preparing'?'Mark Ready':'Mark Served'}</button>}</div>
      {o.billing_mode==='open_bill'&&o.billing_status==='open'&&i.fulfillment_status==='received'&&<button disabled={busy} className="mt-2 text-xs font-semibold text-red-700 underline" onClick={()=>{const reason=window.prompt('Reason for cancelling this unprepared item?');if(reason)void collect('cancelItem',{itemId:i.id,reason});}}>Cancel item</button>}
     </div>)}</div>
    <footer className="flex flex-wrap gap-2 border-t border-zinc-100 bg-[#fafbf9] p-4">
-    {o.billing_mode==='open_bill'&&o.billing_status==='open'&&<><button className={secondary} disabled={busy} onClick={()=>{setSelected(o.id);void loadMenu(o);}}>+ Add Items</button><button className={primary} disabled={busy} onClick={()=>void begin(o)}>Settle Bill · {money(o.total_amount)}</button></>}
+    {o.billing_mode==='open_bill'&&o.billing_status==='open'&&<><button className={secondary} disabled={busy} onClick={()=>{setAddToBill(o.id);}}>+ Add Products</button><button className={primary} disabled={busy} onClick={()=>void begin(o)}>Settle Bill · {money(o.total_amount)}</button></>}
     {o.billing_mode==='open_bill'&&o.billing_status==='settlement_in_progress'&&<button className={primary} onClick={()=>{setSelected(o.id);setAdding(false);}}>Continue Settlement</button>}
     {o.billing_mode==='pay_first'&&o.payment_status==='pending'&&<button className={primary} onClick={()=>{setSelected(o.id);setAdding(false);}}>Collect Payment</button>}
    </footer></article>)}</div>}
+  {addToBill&&(()=>{const o=orders.find(x=>x.id===addToBill);return o&&o.billing_mode==='open_bill'&&o.billing_status==='open'&&o.payment_status==='pending'?<CounterPOS key={o.id} menuId={o.event_id} menuName="Add Products" trackedIds={[]} paymentSettings={null} businessName="BeanBook" existingBill={{id:o.id,number:o.order_number,customerName:label(o.customers),customerPhone:customerPhone(o.customers)}} onClose={()=>{setAddToBill(null);void refresh().catch(()=>{});}}/>:null;})()}
   {chosen&&<div className="fixed inset-0 z-[150] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label={adding?'Add Items':'Settle Bill'}>
    <div className="flex max-h-[95dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
     <div className="flex items-start justify-between border-b p-5"><div><p className="text-xs font-semibold uppercase text-emerald-700">{chosen.order_number}</p><h3 className="mt-1 text-2xl font-bold">{adding?'Add to open bill':'Collect payment'}</h3><p className="mt-1 text-sm text-zinc-500">{label(chosen.customers)}</p></div><button className={secondary} onClick={()=>{setSelected(null);setAdding(false);setError('');}}>✕</button></div>
