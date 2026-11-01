@@ -3,12 +3,12 @@ import { adminSupabase } from './client';
 import ProductOptions from './ProductOptions';
 import ProductImages, {type ProductImagesHandle} from './ProductImages';
 
-type Product = { id: string; name: string; description: string | null; price: number; is_active: boolean; created_at: string };
-type FormValues = { name: string; description: string; price: string };
+type Product = { id: string; name: string; description: string | null; price: number; is_active: boolean; created_at: string; category: string | null };
+type FormValues = { name: string; description: string; price: string; category: string };
 type SizeRow = { name: string; price: string };
 type GalleryImage = { product_id: string; slot: number; url: string };
 type OptionsData = { sizes: { product_id: string; name: string; price: number; display_order: number }[]; addons: { id: string; name: string; is_active: boolean }[]; prices: { addon_id: string; size_name: string; price: number }[]; links: { product_id: string; addon_id: string }[] };
-const empty: FormValues = { name: '', description: '', price: '' };
+const empty: FormValues = { name: '', description: '', price: '', category: '' };
 const money = (value: number) => '₹' + Number(value).toLocaleString('en-IN', { maximumFractionDigits: 2 });
 const control = 'w-full rounded-xl border border-[#d5d7d0] bg-white px-4 py-3 text-sm text-zinc-900 focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/10';
 const primary = 'rounded-xl bg-[#1b2822] px-5 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50';
@@ -94,15 +94,18 @@ export default function ProductsPage() {
     return () => { active = false; };
   }, [refresh]);
 
-  function startAdd() { setEditingId(null); setForm(empty); setMultipleSizes(false); setSizeRows([{name:'Small',price:''},{name:'Medium',price:''},{name:'Large',price:''}]); setAddonIds([]); setShowForm(true); setError(''); setNotice(''); }
-  function startEdit(product: Product) {
+  const openEditor=(id:string)=>{const url=new URL(window.location.href);url.searchParams.set('productEditor',id);window.history.pushState({},'',url);window.scrollTo(0,0);};
+  const closeEditor=()=>{const url=new URL(window.location.href);url.searchParams.delete('productEditor');window.history.pushState({},'',url);setShowForm(false);setEditingId(null);};
+  useEffect(()=>{const sync=()=>{const id=new URLSearchParams(window.location.search).get('productEditor');if(!id){setShowForm(false);return;}if(id==='new'){startAdd(false);return;}const found=products.find(p=>p.id===id);if(found)startEdit(found,false);};window.addEventListener('popstate',sync);return()=>window.removeEventListener('popstate',sync);},[products,options]);
+  function startAdd(navigate=true) { setEditingId(null); setForm(empty); setMultipleSizes(false); setSizeRows([{name:'Small',price:''},{name:'Medium',price:''},{name:'Large',price:''}]); setAddonIds([]); setShowForm(true); setError(''); setNotice(''); if(navigate)openEditor('new'); }
+  function startEdit(product: Product,navigate=true) {
     setEditingId(product.id);
-    setForm({ name: product.name, description: product.description || '', price: String(product.price) });
+    setForm({ name: product.name, description: product.description || '', price: String(product.price), category: product.category || '' });
     const sizes=options.sizes.filter(s=>s.product_id===product.id).sort((a,b)=>a.display_order-b.display_order);
     setMultipleSizes(sizes.length>0);
     setSizeRows(sizes.length?sizes.map(s=>({name:s.name,price:String(s.price)})):[{name:'Small',price:''},{name:'Medium',price:''},{name:'Large',price:''}]);
     setAddonIds(options.links.filter(l=>l.product_id===product.id).map(l=>l.addon_id));
-    setShowForm(true); setError(''); setNotice('');
+    setShowForm(true); setError(''); setNotice(''); if(navigate)openEditor(product.id);
   }
   async function save(e: FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError(''); setNotice('');
@@ -124,14 +127,14 @@ export default function ProductsPage() {
     setSaving(true);
     try {
       const saved = await request({action:'saveCatalog',...(editingId?{productId:editingId}:{}),
-        name:form.name,description:form.description,price,
+        name:form.name,description:form.description,price,category:form.category,
         sizes:sizes.map(r=>({name:r.name.trim(),price:Number(r.price)})),addonIds});
       const savedId = (saved as {productId?:string}).productId;
       if (!savedId) throw new Error('Product saved but the image upload could not start.');
       try { await imagesRef.current?.uploadQueued(savedId); }
       catch { await refresh(); throw new Error('Product saved, but at least one image could not upload. Edit the product to retry.'); }
       await Promise.all([refresh(),refreshOptions(),refreshGallery()]);
-      setShowForm(false);setEditingId(null);setForm(empty);
+      closeEditor();setForm(empty);
       setNotice(editingId?'Product and options updated.':'Product and options added.');
     }catch(e){setError(e instanceof Error?e.message:'Could not save product.');}
     finally{setSaving(false);}
@@ -167,20 +170,21 @@ export default function ProductsPage() {
   }
 
   return <section className="space-y-6">
-    <nav role="tablist" aria-label="Catalogue sections" className="flex gap-2 border-b border-zinc-200 pb-3">
+    {!showForm && <nav role="tablist" aria-label="Catalogue sections" className="flex gap-2 border-b border-zinc-200 pb-3">
       <button type="button" role="tab" aria-selected={tab==='products'} onClick={()=>setTab('products')} className={'rounded-xl px-4 py-3 text-sm font-semibold '+(tab==='products'?'bg-[#1b2822] text-white':'border bg-white text-zinc-700')}>Product Library</button>
       <button type="button" role="tab" aria-selected={tab==='addons'} onClick={()=>{setTab('addons');setShowForm(false);}} className={'rounded-xl px-4 py-3 text-sm font-semibold '+(tab==='addons'?'bg-[#1b2822] text-white':'border bg-white text-zinc-700')}>Add-On Library</button>
-    </nav>
-    {tab==='products'&&<div className="flex flex-wrap items-start justify-between gap-4">
+    </nav>}
+    {!showForm && tab==='products'&&<div className="flex flex-wrap items-start justify-between gap-4">
       <div><h3 className="text-xl font-semibold">Product Library</h3><p className="mt-2 text-sm text-zinc-500">Manage products, photos, sizes and their available add-ons.</p></div>
       <button type="button" onClick={startAdd} disabled={saving || pendingProductId !== null} className={primary}>+ Add Product</button>
     </div>}
     {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     {notice && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{notice}</div>}
     {tab==='products' && showForm && <form onSubmit={e => void save(e)} className="space-y-4 rounded-2xl border border-[#e6e3dc] bg-white p-5 shadow-sm sm:p-7">
-      <div className="flex items-center justify-between gap-4"><h4 className="text-lg font-semibold">{editingId ? 'Edit product' : 'Add a product'}</h4><button type="button" className="text-sm text-zinc-600 underline" onClick={() => setShowForm(false)}>Cancel</button></div>
+      <div className="flex items-center justify-between gap-4"><h4 className="text-lg font-semibold">{editingId ? 'Edit product' : 'Add a product'}</h4><button type="button" className="text-sm text-zinc-600 underline" onClick={closeEditor}>← Back to Products</button></div>
       <label className="block text-sm font-medium">Product name <span className="text-red-700">*</span><input className={control + ' mt-2'} required minLength={2} maxLength={120} placeholder="e.g. Cappuccino" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}/></label>
 
+      <label className="block text-sm font-medium">Product category <span className="font-normal text-zinc-500">(optional)</span><input className={control + ' mt-2'} maxLength={60} list="product-categories" placeholder="e.g. Coffee, Food, Snacks" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}/><datalist id="product-categories">{Array.from(new Set(products.map(p=>p.category).filter((x):x is string=>!!x))).map(x=><option key={x} value={x}/>)}</datalist></label>
       <label className="block text-sm font-medium">Description <span className="font-normal text-zinc-500">(optional)</span><textarea className={control + ' mt-2'} rows={3} maxLength={500} placeholder="What makes it special?" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}/></label>
       <div className="rounded-xl border border-zinc-200 p-4 space-y-4">
         <label className="flex items-center justify-between gap-3 font-medium">Multiple sizes
@@ -206,7 +210,7 @@ export default function ProductsPage() {
       <ProductImages key={editingId || 'new'} productId={editingId} apiRef={imagesRef} />
       <button className={primary} disabled={saving || pendingProductId !== null}>{saving ? 'Saving product and photos…' : editingId ? 'Save changes' : 'Save product'}</button>
     </form>}
-    {tab==='products' && (loading ? <p className="py-8 text-sm text-zinc-500">Loading products…</p> :
+    {!showForm && tab==='products' && (loading ? <p className="py-8 text-sm text-zinc-500">Loading products…</p> :
       products.length === 0 ? <div className="rounded-2xl border border-dashed border-[#d5d7d0] bg-white p-8 text-center">
         <h4 className="text-lg font-semibold">Your catalogue is empty</h4>
         <p className="mt-2 text-sm text-zinc-500">Start by adding your first product.</p>
@@ -220,6 +224,7 @@ export default function ProductsPage() {
               <h4 className={'font-semibold '+(p.is_active?'text-[#1b2822]':'text-zinc-700')}>{p.name}</h4>
               {!p.is_active&&<span className="rounded-full border border-amber-400 bg-amber-100 px-3 py-1 text-xs font-bold uppercase text-amber-950">Archived · Not for sale</span>}
             </div>
+            {p.category&&<p className="mt-1 text-xs font-semibold uppercase tracking-wide text-emerald-800">{p.category}</p>}
             {p.description&&<p className="mt-1 text-sm text-zinc-500">{p.description}</p>}
             {(()=>{
               const sizes=options.sizes.filter(s=>s.product_id===p.id).sort((a,b)=>a.display_order-b.display_order);
@@ -241,7 +246,7 @@ export default function ProductsPage() {
             </button>
           </div>
         </article>)}</div>)}
-    {tab==='addons' && <ProductOptions onChanged={()=>void refreshOptions()} />}
-    {tab==='products' && <p className="text-xs text-zinc-500">Archiving preserves order history. Size-specific prices and product photos are configured from Edit.</p>}
+    {!showForm && tab==='addons' && <ProductOptions onChanged={()=>void refreshOptions()} />}
+    {!showForm && tab==='products' && <p className="text-xs text-zinc-500">Archiving preserves order history. Size-specific prices and product photos are configured from Edit.</p>}
   </section>;
 }
