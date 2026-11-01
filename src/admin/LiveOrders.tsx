@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
 import {QRCodeCanvas} from 'qrcode.react';
-import {flushSync} from 'react-dom';
+import {createPortal,flushSync} from 'react-dom';
 import CounterPOS from './CounterPOS';
 import {adminSupabase} from './client';
 
@@ -58,8 +58,25 @@ export default function LiveOrders(){
  },[refresh]);
  const chosen=orders.find(o=>o.id===selected);
  const printOrder=orders.find(o=>o.id===printOrderId);
- const printBill=(orderId:string)=>{flushSync(()=>setPrintOrderId(orderId));window.print();};
- useEffect(()=>{const onAfterPrint=()=>setPrintOrderId(null);window.addEventListener('afterprint',onAfterPrint);return()=>window.removeEventListener('afterprint',onAfterPrint);},[]);
+ const printBill=(orderId:string)=>{
+  // Render the receipt in document.body, outside the dashboard's #root.
+  // Measure at its real 55mm width before choosing the required roll-paper length.
+  flushSync(()=>setPrintOrderId(orderId));
+  const receipt=document.getElementById('bb-print-receipt');
+  if(!receipt){setError('Could not prepare the receipt. Please try again.');return;}
+  const mmHeight=Math.max(75,Math.ceil(receipt.scrollHeight*25.4/96)+5);
+  document.getElementById('bb-receipt-page-size')?.remove();
+  const paperStyle=document.createElement('style');
+  paperStyle.id='bb-receipt-page-size';
+  paperStyle.textContent='@page { size: 55mm '+mmHeight+'mm; margin: 0; }';
+  document.head.appendChild(paperStyle);
+  window.print();
+ };
+ useEffect(()=>{
+  const onAfterPrint=()=>{setPrintOrderId(null);document.getElementById('bb-receipt-page-size')?.remove();};
+  window.addEventListener('afterprint',onAfterPrint);
+  return()=>{window.removeEventListener('afterprint',onAfterPrint);document.getElementById('bb-receipt-page-size')?.remove();};
+ },[]);
  // Payment and fulfillment are independent: settlement must NEVER hide an unserved order.
  // Cancelled line items do not require preparation; empty/voided bills are NOT completed sales.
  const isServedAndPaid=(o:Order)=>o.payment_status==='paid'
@@ -120,7 +137,7 @@ export default function LiveOrders(){
     {o.billing_mode==='open_bill'&&o.billing_status==='settlement_in_progress'&&<button className={primary} onClick={()=>{setSelected(o.id);setAdding(false);}}>Continue Settlement</button>}
     {o.billing_mode==='pay_first'&&o.payment_status==='pending'&&<button className={primary} onClick={()=>{setSelected(o.id);setAdding(false);}}>Collect Payment</button>}
    </footer></article>)}</div>}
-  {printOrder&&<div id="bb-print-receipt" aria-label="Printable bill">
+  {printOrder&&createPortal(<div id="bb-print-receipt" aria-label="Printable bill">
     <div className="receipt-center receipt-heading">BeanBook · Customer Bill</div>
     <div className="receipt-center">{printOrder.order_number}</div>
     <div className="receipt-rule" />
@@ -136,7 +153,7 @@ export default function LiveOrders(){
     <div className="receipt-rule" />
     <div className="receipt-total"><span>ORDER TOTAL</span><strong>{money(printOrder.total_amount)}</strong></div>
     <div className="receipt-center receipt-footer">Thank you for your order!</div>
-  </div>}
+  </div>, document.body)}
   {editing&&editOrder&&editItem&&<div className="fixed inset-0 z-[160] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label="Edit item">
     <div className="max-h-[90dvh] w-full max-w-lg space-y-4 overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl">
       <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold text-emerald-700">{editOrder.order_number}</p><h3 className="text-xl font-bold">Edit {label(editItem.products)}</h3><p className="mt-1 text-sm text-zinc-500">Changes are repriced before preparation. The original item stays in the audit trail.</p></div><button type="button" className={secondary} onClick={()=>setEditing(null)}>Close</button></div>
