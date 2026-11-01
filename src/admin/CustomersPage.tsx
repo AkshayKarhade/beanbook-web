@@ -3,6 +3,8 @@ import {createPortal} from 'react-dom';
 import {adminSupabase} from './client';
 
 type Customer={id:string;name:string;phone:string;ltv:number;orderCount:number;latestOrderAt:string|null};
+type RecentOrder={id:string;number:string;createdAt:string;amount:number;paymentStatus:string;items:{name:string;quantity:number;size:string|null}[]};
+type Insights={customerSince:string;firstOrderAt:string|null;paidOrderCount:number;topProduct:{name:string;quantity:number}|null;topProductSampleSize:number;recentOrders:RecentOrder[]};
 const currency=new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',minimumFractionDigits:2});
 const dateDisplay=new Intl.DateTimeFormat('en-IN',{day:'2-digit',month:'short',year:'numeric',timeZone:'Asia/Kolkata'});
 const dayKey=(date:Date)=>new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Kolkata'}).format(date);
@@ -18,6 +20,8 @@ export default function CustomersPage({canEdit=false}:{canEdit?:boolean}){
  const [selectedId,setSelectedId]=useState<string|null>(null),[editing,setEditing]=useState(false);
  const [name,setName]=useState(''),[phone,setPhone]=useState(''),[saving,setSaving]=useState(false),[saveError,setSaveError]=useState(''),[notice,setNotice]=useState('');
  const [now]=useState(()=>new Date());
+ const [insights,setInsights]=useState<Insights|null>(null);
+ const [insightsLoading,setInsightsLoading]=useState(false),[insightsError,setInsightsError]=useState('');
  const closeRef=useRef<HTMLButtonElement>(null);
  const selected=rows.find(c=>c.id===selectedId)||null;
  useEffect(()=>{
@@ -55,6 +59,27 @@ export default function CustomersPage({canEdit=false}:{canEdit?:boolean}){
   document.addEventListener('keydown',onKey);
   return()=>{document.body.style.overflow=old;document.removeEventListener('keydown',onKey);};
  },[selectedId,saving]);
+ useEffect(()=>{
+  if(!selectedId)return;
+  const controller=new AbortController();
+  async function loadInsights(){
+   setInsightsLoading(true);setInsightsError('');setInsights(null);
+   try{
+    const {data:auth}=await adminSupabase!.auth.getSession();
+    const token=auth.session?.access_token;
+    if(!token)throw new Error('Session expired. Sign in again.');
+    const res=await fetch('/api/business-products?mode=customers&id='+encodeURIComponent(selectedId),{
+     headers:{Authorization:'Bearer '+token},signal:controller.signal
+    });
+    const result=await res.json();
+    if(!res.ok)throw new Error(result.error||'Customer insights are unavailable.');
+    if(!controller.signal.aborted)setInsights(result.insights as Insights);
+   }catch(e){if(!controller.signal.aborted)setInsightsError(e instanceof Error?e.message:'Could not load customer history');}
+   finally{if(!controller.signal.aborted)setInsightsLoading(false);}
+  }
+  void loadInsights();
+  return()=>controller.abort();
+ },[selectedId]);
  function open(c:Customer){setSelectedId(c.id);setName(c.name);setPhone(c.phone);setEditing(false);setSaveError('');setNotice('');}
  function close(){if(saving)return;setSelectedId(null);setEditing(false);}
  async function save(e:FormEvent){
@@ -108,6 +133,31 @@ export default function CustomersPage({canEdit=false}:{canEdit?:boolean}){
      </form>:<div className="rounded-2xl bg-white p-5"><p className="text-xs text-zinc-500">Name</p><p className="mt-1 font-semibold">{selected.name}</p><p className="mt-5 text-xs text-zinc-500">Phone</p><p className="mt-1 font-semibold">{selected.phone}</p></div>}
      <div className="grid grid-cols-2 gap-3"><div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">Lifetime paid value</p><p className="mt-2 text-lg font-semibold tabular-nums">{currency.format(selected.ltv)}</p></div><div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">Total orders</p><p className="mt-2 text-lg font-semibold tabular-nums">{selected.orderCount}</p></div></div>
      <div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">Latest order</p><p className="mt-2 font-semibold">{selected.latestOrderAt?dateDisplay.format(new Date(selected.latestOrderAt))+' ('+daysSince(selected.latestOrderAt,now)+' days ago)':'No orders yet'}</p></div>
+     <section aria-label="Customer purchase insights" className="space-y-3">
+      <h4 className="text-sm font-bold uppercase tracking-wide text-[#526c5b]">Purchase insights</h4>
+      {insightsLoading&&<p role="status" className="rounded-xl bg-white p-4 text-sm text-zinc-500">Loading purchase insights…</p>}
+      {insightsError&&<p role="alert" className="rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700">{insightsError}</p>}
+      {insights&&<>
+       <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">Customer since</p><p className="mt-2 font-semibold">{dateDisplay.format(new Date(insights.customerSince))}</p></div>
+        <div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">First order</p><p className="mt-2 font-semibold">{insights.firstOrderAt?dateDisplay.format(new Date(insights.firstOrderAt)):'No orders'}</p></div>
+        <div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">Paid orders</p><p className="mt-2 font-semibold tabular-nums">{insights.paidOrderCount}</p></div>
+        <div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">Avg. paid order</p><p className="mt-2 font-semibold tabular-nums">{insights.paidOrderCount?currency.format(selected.ltv/insights.paidOrderCount):'—'}</p></div>
+       </div>
+       <div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">Most purchased product</p><p className="mt-2 font-semibold">{insights.topProduct?insights.topProduct.name:'Not available yet'}</p>
+        {insights.topProduct&&<p className="mt-1 text-xs text-zinc-500">{insights.topProduct.quantity} units across up to {insights.topProductSampleSize} recent paid orders</p>}
+       </div>
+      </>}
+     </section>
+     <section aria-label="Recent purchases" className="space-y-3">
+      <h4 className="text-sm font-bold uppercase tracking-wide text-[#526c5b]">Recent orders</h4>
+      {insights&&!insights.recentOrders.length&&<p className="rounded-xl bg-white p-4 text-sm text-zinc-500">No orders yet.</p>}
+      {insights?.recentOrders.map(o=><article key={o.id} className="rounded-2xl bg-white p-4">
+       <div className="flex items-start justify-between gap-3"><div><p className="break-all text-sm font-semibold">{o.number}</p><p className="mt-1 text-xs text-zinc-500">{dateDisplay.format(new Date(o.createdAt))} · {o.paymentStatus==='paid'?'Paid':o.paymentStatus==='pending'?'Payment pending':o.paymentStatus.replace(/_/g,' ')}</p></div><p className="shrink-0 text-sm font-semibold">{currency.format(o.amount)}</p></div>
+       <div className="mt-3 border-t pt-3">{o.items.length?o.items.map((item,index)=><p key={index} className="text-xs leading-6 text-zinc-600">{item.quantity} × {item.name}{item.size?' · '+item.size:''}</p>):<p className="text-xs text-zinc-500">Order items unavailable</p>}</div>
+      </article>)}
+      {insights&&insights.recentOrders.length>0&&<p className="text-xs text-zinc-500">Showing the five most recent orders, including unpaid orders.</p>}
+     </section>
      {!canEdit&&<p className="text-xs leading-5 text-zinc-500">Only the Business Admin can edit customer details.</p>}
     </div>
     {canEdit&&<footer className="flex gap-3 border-t bg-white p-5">{editing?<><button type="button" disabled={saving} onClick={()=>{setEditing(false);setSaveError('');setName(selected.name);setPhone(selected.phone);}} className="flex-1 rounded-xl border px-4 py-3 font-semibold">Cancel</button><button type="submit" form="edit-customer-form" disabled={saving} className="flex-1 rounded-xl bg-[#1b2822] px-4 py-3 font-semibold text-white disabled:opacity-50">{saving?'Saving…':'Save changes'}</button></>:<button type="button" onClick={()=>{setEditing(true);setNotice('');}} className="w-full rounded-xl bg-[#1b2822] px-4 py-3 font-semibold text-white">Edit details</button>}</footer>}
