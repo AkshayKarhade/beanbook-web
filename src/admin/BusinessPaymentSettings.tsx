@@ -42,7 +42,7 @@ export default function BusinessPaymentSettings() {
 
   useEffect(() => {
     let active=true;
-    void (async()=>{try{const auth=await adminSupabase?.auth.getSession();const token=auth?.data.session?.access_token;if(!token)return;const r=await fetch('/api/business-orders',{headers:{Authorization:'Bearer '+token}});if(r.ok){const d=await r.json();if(active)setBillingMode(d.billingMode==='open_bill'?'open_bill':'pay_first');}}catch{ /* existing payments remain available */ }})();
+    void (async()=>{try{const auth=await adminSupabase?.auth.getSession();const token=auth?.data.session?.access_token;if(!token)return;const r=await fetch('/api/business-products?mode=orders',{headers:{Authorization:'Bearer '+token}});if(r.ok){const d=await r.json();if(active)setBillingMode(d.billingMode==='open_bill'?'open_bill':'pay_first');}}catch{ /* existing payments remain available */ }})();
     return()=>{active=false;};
   },[]);
 
@@ -84,7 +84,7 @@ export default function BusinessPaymentSettings() {
     if(billingBusy)return;
     setBillingBusy(true);setBillingMessage('');
     try{const auth=await adminSupabase?.auth.getSession();const token=auth?.data.session?.access_token;if(!token)throw new Error('Sign in again');
-      const r=await fetch('/api/business-orders',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({action:'saveBillingMode',billingMode:mode})});
+      const r=await fetch('/api/business-products?mode=orders',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({action:'saveBillingMode',billingMode:mode})});
       const body=await r.json();if(!r.ok)throw new Error(body.error||'Could not save billing mode');setBillingMode(mode);setBillingMessage('Saved. This applies only to new orders.');
     }catch(e){setBillingMessage(e instanceof Error?e.message:'Could not save');}finally{setBillingBusy(false);}
   }
