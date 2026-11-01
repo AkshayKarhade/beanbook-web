@@ -16,7 +16,7 @@ export default async function salesMenus(req:Request){
   const brandId=membership.brand_id as string;
   if(req.method==='GET'){
    const [events,assignments,sizes,overrides,products,brand]=await Promise.all([
-    db.from('events').select('id,name,slug,sales_mode,status,event_start_date,event_end_date,location,ordering_closes_at').eq('brand_id',brandId).in('sales_mode',['regular','event']).order('created_at',{ascending:false}),
+    db.from('events').select('id,name,slug,sales_mode,status,event_start_date,event_end_date,location,ordering_closes_at').eq('brand_id',brandId) .in('sales_mode',['regular','event']).neq('status','deleted').order('created_at',{ascending:false}),
     db.from('event_products').select('id,event_id,product_id,display_order,price_override,inventory_tracking,events!inner(brand_id,sales_mode)').eq('events.brand_id',brandId).in('events.sales_mode',['regular','event']).order('display_order'),
     db.from('product_sizes').select('product_id,name,price,display_order').eq('brand_id',brandId),
     db.from('event_product_size_prices').select('event_product_id,size_name,price').eq('brand_id',brandId),
@@ -49,6 +49,14 @@ export default async function salesMenus(req:Request){
    const {data,error}=await db.rpc('beanbook_publish_sales_menu',{p_brand_id:brandId,p_menu_id:body.menuId});
    if(error){if(error.code==='22023')return json({error:error.message},400);throw error;}
    return json({ok:true,menuId:data});
+  }
+  if(body.action==='deleteMenu'){
+   if(!uuid(body.menuId))return json({error:'Invalid menu'},400);
+   // Soft deletion preserves existing order references and audit history.
+   const {data,error}=await db.from('events').update({status:'deleted'}).eq('id',body.menuId).eq('brand_id',brandId).in('sales_mode',['regular','event']).in('status',['draft','published']).select('id').maybeSingle();
+   if(error)throw error;
+   if(!data)return json({error:'Menu not found or already deleted'},404);
+   return json({ok:true,menuId:data.id});
   }
   if(body.action==='saveDraftItems'){
    if(!uuid(body.menuId)||!Array.isArray(body.items)||body.items.length>80)return json({error:'Invalid menu configuration'},400);
