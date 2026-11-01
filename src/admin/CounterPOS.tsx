@@ -28,6 +28,8 @@ export default function CounterPOS({
  const [selected,setSelected]=useState<Product|null>(null),[selectedSize,setSelectedSize]=useState(''),[selectedAddons,setSelectedAddons]=useState<string[]>([]),[selectedQty,setSelectedQty]=useState(1);
  const [cart,setCart]=useState<Line[]>([]),[cartOpen,setCartOpen]=useState(false);
  const [orderNumber,setOrderNumber]=useState(''),[amount,setAmount]=useState<number|null>(null);
+ const [billingMode,setBillingMode]=useState<'pay_first'|'open_bill'>('pay_first');
+ const [requestId,setRequestId]=useState(()=>crypto.randomUUID());
  const [paymentMethod,setPaymentMethod]=useState<'upi'|'cash'>('upi'),[reference,setReference]=useState(''),[paid,setPaid]=useState(false);
 
  useEffect(()=>{
@@ -54,6 +56,8 @@ export default function CounterPOS({
       setAddons(optionsBody.addons||[]);
       setAddonPrices(optionsBody.prices||[]);
       setLinks(optionsBody.links||[]);
+      const billingResponse=await fetch('/api/business-orders',{headers:{Authorization:'Bearer '+token},signal:controller.signal});
+      if(billingResponse.ok){const bill=await billingResponse.json();setBillingMode(bill.billingMode==='open_bill'?'open_bill':'pay_first');}
     }
    }catch(e){if(active)setError(e instanceof Error?e.message:'Unable to load menu');}
    finally{if(active)setLoading(false);}
@@ -90,7 +94,7 @@ export default function CounterPOS({
 
  function exit(){
   if(busy)return;
-  if(stage==='payment'&&!paid&&!window.confirm('This order is saved but unpaid. Exit the POS anyway?'))return;
+  if(stage==='payment'&&!paid&&billingMode==='pay_first'&&!window.confirm('This order is saved but unpaid. Exit the POS anyway?'))return;
   if(stage==='menu'&&cart.length>0&&!window.confirm('Discard the unsaved cart and exit POS?'))return;
   onClose();
  }
@@ -118,7 +122,7 @@ export default function CounterPOS({
   const auth=await adminSupabase?.auth.getSession();
   const token=auth?.data.session?.access_token;
   if(!token)throw new Error('Your session expired. Sign in again.');
-  const response=await fetch('/api/business-products?mode=menus',{
+  const response=await fetch('/api/business-orders',{
     method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)
   });
   const result=await response.json().catch(()=>null);
@@ -130,11 +134,12 @@ export default function CounterPOS({
   if(!cart.length||busy)return;
   setBusy(true);setError('');
   try{
-   const receipt=await authedPost({
-    action:'createCounterOrder',menuId,customerName:name.trim(),customerPhone:phone,
+   const response=await authedPost({
+    action:'create',requestId,menuId,customerName:name.trim(),customerPhone:phone,
     items:cart.map(l=>({product_id:l.product_id,size_name:l.size_name,quantity:l.quantity,addon_ids:l.addon_ids}))
    });
-   if(typeof receipt.orderNumber!=='string'||!Number.isFinite(Number(receipt.amount))||Number(receipt.amount)<=0)throw new Error('Order was submitted, but receipt details could not be loaded. Check Live Orders before retrying.');
+   const receipt=response.result;
+   if(typeof receipt?.orderNumber!=='string'||!Number.isFinite(Number(receipt.amount))||Number(receipt.amount)<=0)throw new Error('Order was submitted, but receipt details could not be loaded. Check Live Orders before retrying.');
    setOrderNumber(receipt.orderNumber);setAmount(Number(receipt.amount));setPaymentMethod(paymentSettings?'upi':'cash');
    setCartOpen(false);setStage('payment');
   }catch(e){setError(e instanceof Error?e.message:'Could not place order');setCartOpen(true);}
@@ -145,13 +150,14 @@ export default function CounterPOS({
   if(!window.confirm('Have you independently verified receipt of '+money(amount||0)+' in the business account or cash drawer?'))return;
   setBusy(true);setError('');
   try{
-   await authedPost({action:'confirmCounterPayment',orderNumber,paymentMethod,transactionReference:reference.trim()});
+   if(billingMode==='open_bill')throw new Error('Open bills must be settled from Live Orders.');
+   await authedPost({action:'confirmPayment',orderNumber,paymentMethod,transactionReference:reference.trim()});
    setPaid(true);
   }catch(e){setError(e instanceof Error?e.message:'Could not confirm payment');}
   finally{setBusy(false);}
  }
  function newSale(){
-  setName('');setPhone('+91');setCart([]);setQuery('');setCategory('All');setOrderNumber('');setAmount(null);setReference('');setPaid(false);setPaymentMethod(paymentSettings?'upi':'cash');setError('');setStage('customer');
+  setRequestId(crypto.randomUUID());setName('');setPhone('+91');setCart([]);setQuery('');setCategory('All');setOrderNumber('');setAmount(null);setReference('');setPaid(false);setPaymentMethod(paymentSettings?'upi':'cash');setError('');setStage('customer');
  }
  const renderCart=(mobile:boolean)=><div className="flex h-full flex-col bg-white">
   <div className="flex items-center justify-between gap-3 border-b border-[#eeeae4] px-5 py-4">
@@ -216,7 +222,7 @@ export default function CounterPOS({
        <label className="block space-y-2 text-sm font-semibold">Phone number <span className="text-red-700">*</span><input type="tel" inputMode="tel" autoComplete="tel" required className={input} value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+919876543210" /></label>
        <label className="block space-y-2 text-sm font-semibold">Customer name <span className="text-red-700">*</span><input type="text" autoComplete="name" required minLength={2} maxLength={120} className={input} value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Rahul" /></label>
        <button type="submit" className={primary+' flex w-full items-center justify-center gap-3'}>Continue to Menu <span aria-hidden="true">→</span></button>
-       <p className="text-xs leading-5 text-zinc-500">Details are used for the business's order record. No customer account required.</p>
+       <p className="rounded-lg bg-[#eef4ed] p-3 text-sm font-semibold text-[#2e543a]">{billingMode==='open_bill'?'Open Bill · Pay Later':'Pay First · Payment before preparation'}</p><p className="text-xs leading-5 text-zinc-500">Details are used for the business's order record. No customer account required.</p>
       </form>
      </div>
     </div>}
@@ -271,7 +277,7 @@ export default function CounterPOS({
        <p className="mt-3 break-all text-sm text-zinc-500">{orderNumber} · {name}</p>
        <span className={'mt-4 inline-flex rounded-full px-3 py-1.5 text-xs font-bold '+(paid?'bg-green-100 text-green-900':'bg-amber-100 text-amber-900')}>{paid?'Payment received':'Awaiting payment'}</span>
       </div>
-      {paid?<div className="space-y-4 rounded-3xl border border-[#bedfc4] bg-white p-6 text-center sm:p-8">
+      {billingMode==='open_bill'&&!paid?<div className="space-y-4 rounded-3xl bg-white p-6 text-center"><h3 className="text-xl font-bold">Open bill created</h3><p className="text-sm text-zinc-600">Preparation can begin now. Add items and settle the final amount from Live Orders.</p><button type="button" className={primary} onClick={onClose}>Return to workspace</button></div>:paid?<div className="space-y-4 rounded-3xl border border-[#bedfc4] bg-white p-6 text-center sm:p-8">
         <div className="text-5xl" aria-hidden="true">🎉</div><h3 className="text-2xl font-bold text-[#1b5032]">Payment recorded successfully!</h3>
         <p className="text-sm text-zinc-600">The order is paid and ready for the café's next fulfillment step.</p>
         <button type="button" onClick={newSale} className={primary+' w-full sm:w-auto'}>+ Start New Sale</button>
@@ -297,7 +303,7 @@ export default function CounterPOS({
          </div>
         </section>
        </div>}
-      {!paid&&<div className="text-center"><button type="button" onClick={exit} className="rounded-xl border border-[#deded7] bg-white px-5 py-3 text-sm font-semibold">Exit and leave order pending</button></div>}
+      {!paid&&billingMode==='pay_first'&&<div className="text-center"><button type="button" onClick={exit} className="rounded-xl border border-[#deded7] bg-white px-5 py-3 text-sm font-semibold">Exit and leave order pending</button></div>}
      </div>
     </div>}
    {selected&&<div className="fixed inset-0 z-[140] flex items-end justify-center bg-black/60 sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label={'Customize '+selected.name}>
