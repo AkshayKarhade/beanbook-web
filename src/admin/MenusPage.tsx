@@ -149,26 +149,6 @@ export default function MenusPage({onReturnToLiveOrders}:{onReturnToLiveOrders:(
    </>:<p className="text-sm text-zinc-500">Menu cannot be edited in its current state.</p>}
    </div>}
   {posMenuId&&<CounterPOS key={posMenuId} businessName={data.businessName} menuId={posMenuId} menuName={data.menus.find(m=>m.id===posMenuId)?.name||'Menu'} paymentSettings={data.paymentSettings} trackedIds={data.items.filter(i=>i.event_id===posMenuId&&i.inventory_tracking).map(i=>i.product_id)} onClose={()=>setPosMenuId(null)} onSaveUnpaid={onReturnToLiveOrders}/>}
-  {activatedMenu&&<section className="space-y-4 rounded-2xl border border-emerald-200 bg-white p-6" role="status">
-    <div className="text-3xl" aria-hidden="true">✓</div><h3 className="text-xl font-semibold text-emerald-800">Menu activated successfully!</h3>
-    <p className="text-sm text-zinc-600">{activatedMenu.name} now has its own public link and QR code. You can print this QR for your customers.</p>
-    <div className="mx-auto max-w-sm rounded-2xl border border-zinc-200 bg-[#f5f3ef] p-4 text-center shadow-sm">
-      <div className="space-y-3 rounded-xl bg-white px-5 py-7">
-       {isMenuPreview()&&<p className="rounded-lg bg-amber-100 px-3 py-2 text-xs font-bold text-amber-900">TEST ONLY · PREVIEW QR</p>}
-       <h4 className="text-xl font-bold text-[#1b2822]">{data.businessName}</h4>
-       <p className="text-lg font-semibold text-[#334139]">{activatedMenu.name}</p>
-       <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{activatedMenu.sales_mode==='regular'?'Regular Menu':'Event Menu'}</p>
-       <div ref={qrRef} className="flex justify-center rounded-xl border border-zinc-100 bg-white p-4">
-        <QRCodeCanvas value={menuUrl(activatedMenu.id)} size={512} level="M" marginSize={4} bgColor="#ffffff" fgColor="#111111" style={{width:240,height:240,maxWidth:'100%'}}/>
-       </div>
-       <p className="font-bold uppercase tracking-wide text-[#1b2822]">Scan to View Menu</p>
-       {activatedMenu.location&&<p className="text-xs text-zinc-500">{activatedMenu.location}</p>}
-      </div>
-     </div>
-    <p className="break-all rounded-xl bg-zinc-50 p-3 text-sm">{menuUrl(activatedMenu.id)}</p>
-    {isMenuPreview()&&<p className="text-sm font-medium text-amber-800">This QR opens the temporary development preview. Do not print or share it with customers. After the production release, download a new permanent QR card.</p>}
-    <div className="flex flex-wrap gap-2"><button type="button" className={action} disabled={downloading} onClick={()=>void downloadCard()}>{downloading?'Preparing PNG…':'Download QR Card (PNG)'}</button><button type="button" className="rounded-xl border px-4 py-3 text-sm font-semibold" onClick={()=>void navigator.clipboard.writeText(menuUrl(activatedMenu.id))}>Copy URL</button><a className="rounded-xl border px-4 py-3 text-sm font-semibold" href={menuUrl(activatedMenu.id)} target="_blank" rel="noreferrer">View Menu</a><button type="button" className="rounded-xl border px-4 py-3 text-sm" onClick={()=>setActivated(null)}>Back to Library</button></div>
-    <p className="text-xs text-amber-800">The menu is published for viewing only. Payment and ordering will be enabled after their tests.</p>
-  </section>}
+  
  </section>;
 }
