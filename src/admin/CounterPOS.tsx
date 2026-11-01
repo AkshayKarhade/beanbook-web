@@ -9,6 +9,7 @@ type AddonPrice={addon_id:string;size_name:string;price:number};
 type Link={product_id:string;addon_id:string};
 type Line={key:string;product_id:string;size_name:string;quantity:number;addon_ids:string[]};
 type Stage='customer'|'menu'|'payment';
+type ExistingBill={id:string;number:string;customerName:string;customerPhone:string};
 type Payment={upi_vpa:string;payee_name:string}|null;
 const money=(n:number)=>'₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const green='bg-[#1b2822] text-white';
@@ -18,10 +19,10 @@ const primary='rounded-2xl bg-[#1b2822] px-5 py-3.5 font-semibold text-white tra
 function CounterIcon({children}:{children:ReactNode}){return <span aria-hidden="true" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#edf2ed] text-xl text-[#2a4432]">{children}</span>;}
 
 export default function CounterPOS({
- menuId,menuName,trackedIds,paymentSettings,businessName,onClose
-}:{menuId:string;menuName:string;trackedIds:string[];paymentSettings:Payment;businessName:string;onClose:()=>void}){
- const [stage,setStage]=useState<Stage>('customer');
- const [phone,setPhone]=useState('+91'),[name,setName]=useState('');
+ menuId,menuName,trackedIds,paymentSettings,businessName,onClose,existingBill
+}:{menuId:string;menuName:string;trackedIds:string[];paymentSettings:Payment;businessName:string;onClose:()=>void;existingBill?:ExistingBill}){
+ const [stage,setStage]=useState<Stage>(existingBill?'menu':'customer');
+ const [phone,setPhone]=useState(existingBill?.customerPhone||'+91'),[name,setName]=useState(existingBill?.customerName||'');
  const [products,setProducts]=useState<Product[]>([]),[addons,setAddons]=useState<Addon[]>([]),[addonPrices,setAddonPrices]=useState<AddonPrice[]>([]),[links,setLinks]=useState<Link[]>([]);
  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [query,setQuery]=useState(''),[category,setCategory]=useState('All');
@@ -136,10 +137,11 @@ export default function CounterPOS({
   setBusy(true);setError('');
   try{
    const response=await authedPost({
-    action:'create',requestId,billingMode,menuId,customerName:name.trim(),customerPhone:phone,
+    ...(existingBill?{action:'addItems',orderId:existingBill.id,requestId}:{action:'create',requestId,billingMode,menuId,customerName:name.trim(),customerPhone:phone}),
     items:cart.map(l=>({product_id:l.product_id,size_name:l.size_name,quantity:l.quantity,addon_ids:l.addon_ids}))
    });
    const receipt=response.result;
+   if(existingBill){if(!Number.isFinite(Number(receipt?.amount)))throw new Error('Bill was updated but the response was incomplete. Check Live Orders.');onClose();return;}
    if(typeof receipt?.orderNumber!=='string'||!Number.isFinite(Number(receipt.amount))||Number(receipt.amount)<=0)throw new Error('Order was submitted, but receipt details could not be loaded. Check Live Orders before retrying.');
    setOrderNumber(receipt.orderNumber);setAmount(Number(receipt.amount));setPaymentMethod(paymentSettings?'upi':'cash');
    setCartOpen(false);setStage('payment');
@@ -187,10 +189,11 @@ export default function CounterPOS({
    }
   </div>
   <div className="space-y-3 border-t border-[#eeeae4] bg-[#faf9f6] p-4">
+   {existingBill&&<div className="border-b border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900">Add products to {existingBill.number} · {name} · {phone}</div>}
    {error&&<div role="alert" aria-live="assertive" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">Could not confirm order: {error}</div>}
    <div className="flex items-center justify-between text-sm text-zinc-500"><span>{count} item{count===1?'':'s'}</span><span>Subtotal</span></div>
    <div className="flex items-center justify-between text-2xl font-bold"><span>Total</span><span>{money(total)}</span></div>
-   <button type="button" className={primary+' w-full'} disabled={!cart.length||busy} onClick={()=>void placeOrder()}>{busy?'Placing order…':'Confirm Order · '+money(total)}</button>
+   <button type="button" className={primary+' w-full'} disabled={!cart.length||busy} onClick={()=>void placeOrder()}>{busy?'Saving…':existingBill?'Add to Bill · '+money(total):'Confirm Order · '+money(total)}</button>
    <p className="text-center text-[11px] leading-4 text-zinc-500">Final price is verified by BeanBook before payment.</p>
   </div>
  </div>;
@@ -211,7 +214,7 @@ export default function CounterPOS({
    {error&&<div role="alert" className="z-20 flex shrink-0 items-start justify-between gap-3 border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-800">
      <span>{error}</span><button type="button" aria-label="Dismiss error" onClick={()=>setError('')}>✕</button>
     </div>}
-   {stage==='customer'&&<div className="min-h-0 flex-1 overflow-y-auto px-4 py-7 sm:px-8 sm:py-12">
+   {stage==='customer'&&!existingBill&&<div className="min-h-0 flex-1 overflow-y-auto px-4 py-7 sm:px-8 sm:py-12">
      <div className="mx-auto max-w-5xl lg:grid lg:grid-cols-[0.9fr_1.1fr] lg:overflow-hidden lg:rounded-[28px] lg:bg-white lg:shadow-lg">
       <div className="hidden flex-col justify-between bg-[#233b2c] p-10 text-white lg:flex">
        <span className="text-sm font-semibold tracking-[0.18em] text-white/60">A FRESH SALE</span>
@@ -232,7 +235,7 @@ export default function CounterPOS({
      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-5 sm:px-7 sm:pt-7 lg:pb-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm">
        <div className="flex items-center gap-3"><CounterIcon>👤</CounterIcon><div><p className="text-sm font-bold">{name.trim()}</p><p className="text-xs text-zinc-500">{phone}</p></div></div>
-       <button type="button" onClick={()=>setStage('customer')} className="rounded-xl border border-[#e4e4db] px-4 py-2 text-sm font-semibold">Edit customer</button>
+       {!existingBill&&<button type="button" onClick={()=>setStage('customer')} className="rounded-xl border border-[#e4e4db] px-4 py-2 text-sm font-semibold">Edit customer</button>}
       </div>
       <div className="mb-5"><p className="mb-2 text-xs font-bold uppercase text-emerald-800">{billingMode==='open_bill'?'Pay Later · Open Bill':'Pay First · Close bill after payment'}</p><h2 className="text-2xl font-bold sm:text-3xl">What can we get you?</h2><p className="mt-1 text-sm text-zinc-500">Choose a product and customize it for {name.trim()}.</p></div>
       <label className="mb-5 flex items-center gap-3 rounded-2xl border border-[#e2e3dc] bg-white px-4 py-3 shadow-sm">
