@@ -2,9 +2,9 @@ import {useEffect,useRef,useState,type FormEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {adminSupabase} from './client';
 
-type Customer={id:string;name:string;phone:string;ltv:number;orderCount:number;latestOrderAt:string|null};
+type Customer={id:string;name:string;phone:string;email:string|null;ltv:number;orderCount:number;latestOrderAt:string|null};
 type RecentOrder={id:string;number:string;createdAt:string;amount:number;paymentStatus:string;items:{name:string;quantity:number;size:string|null}[]};
-type Insights={customerSince:string;firstOrderAt:string|null;paidOrderCount:number;topProduct:{name:string;quantity:number}|null;topProductSampleSize:number;recentOrders:RecentOrder[]};
+type Insights={email:string|null;customerSince:string;firstOrderAt:string|null;paidOrderCount:number;topProduct:{name:string;quantity:number}|null;topProductSampleSize:number;recentOrders:RecentOrder[]};
 const currency=new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',minimumFractionDigits:2});
 const dateDisplay=new Intl.DateTimeFormat('en-IN',{day:'2-digit',month:'short',year:'numeric',timeZone:'Asia/Kolkata'});
 const dayKey=(date:Date)=>new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Kolkata'}).format(date);
@@ -117,7 +117,7 @@ export default function CustomersPage({canEdit=false}:{canEdit?:boolean}){
     {filtered.map(c=><button key={c.id} type="button" onClick={()=>open(c)} className="rounded-2xl border border-[#e6e3dc] bg-white p-5 text-left shadow-sm transition hover:border-[#70947b] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#355a41]" aria-label={'View '+c.name+' customer details'}>
      <div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-base font-semibold text-[#1b2822]">{c.name}</p><p className="mt-1 text-xs text-zinc-500">{c.phone}</p></div><span className="text-xl text-[#5c7661]" aria-hidden="true">↗</span></div>
      <div className="mt-5 grid grid-cols-2 gap-3 border-t border-[#eeece8] pt-4"><div><p className="text-xs text-zinc-500">LTV (Paid)</p><p className="mt-1 font-semibold tabular-nums">{currency.format(c.ltv)}</p></div><div><p className="text-xs text-zinc-500">Orders</p><p className="mt-1 font-semibold tabular-nums">{c.orderCount}</p></div></div>
-     <p className="mt-4 text-xs text-zinc-500">Latest: {c.latestOrderAt?dateDisplay.format(new Date(c.latestOrderAt))+' ('+daysSince(c.latestOrderAt,now)+' days ago)':'No orders yet'}</p>
+     {c.email&&<p className="mt-2 truncate text-xs text-[#355a41]">✉ {c.email}</p>}<p className="mt-4 text-xs text-zinc-500">Latest: {c.latestOrderAt?dateDisplay.format(new Date(c.latestOrderAt))+' ('+daysSince(c.latestOrderAt,now)+' days ago)':'No orders yet'}</p>
     </button>)}
    </div>}
   {!loading&&!filtered.length&&<p className="rounded-2xl bg-white p-8 text-center text-sm text-zinc-500">{rows.length?'No customers match your search.':'No customers found for this business yet.'}</p>}
@@ -131,7 +131,7 @@ export default function CustomersPage({canEdit=false}:{canEdit?:boolean}){
      {editing?<form id="edit-customer-form" onSubmit={e=>void save(e)} className="space-y-4">
       <label className="block text-sm font-medium">Customer name<input required minLength={2} maxLength={120} value={name} onChange={e=>setName(e.target.value)} className="mt-2 w-full rounded-xl border border-zinc-300 bg-white px-4 py-3"/></label>
       <label className="block text-sm font-medium">Phone number<input required type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+919876543210" className="mt-2 w-full rounded-xl border border-zinc-300 bg-white px-4 py-3"/></label>
-     </form>:<div className="rounded-2xl bg-white p-5"><p className="text-xs text-zinc-500">Name</p><p className="mt-1 font-semibold">{selected.name}</p><p className="mt-5 text-xs text-zinc-500">Phone</p><p className="mt-1 font-semibold">{selected.phone}</p></div>}
+     </form>:<div className="rounded-2xl bg-white p-5"><p className="text-xs text-zinc-500">Name</p><p className="mt-1 font-semibold">{selected.name}</p><p className="mt-5 text-xs text-zinc-500">Phone</p><p className="mt-1 font-semibold">{selected.phone}</p><p className="mt-5 text-xs text-zinc-500">Email</p><p className="mt-1 font-semibold break-all">{insights?.email||selected.email||'Not provided'}</p></div>}
      <div className="grid grid-cols-2 gap-3"><div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">Lifetime paid value</p><p className="mt-2 text-lg font-semibold tabular-nums">{currency.format(selected.ltv)}</p></div><div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">Total orders</p><p className="mt-2 text-lg font-semibold tabular-nums">{selected.orderCount}</p></div></div>
      <div className="rounded-2xl bg-white p-4"><p className="text-xs text-zinc-500">Latest order</p><p className="mt-2 font-semibold">{selected.latestOrderAt?dateDisplay.format(new Date(selected.latestOrderAt))+' ('+daysSince(selected.latestOrderAt,now)+' days ago)':'No orders yet'}</p></div>
      <section aria-label="Customer purchase insights" className="space-y-3">

@@ -9,6 +9,7 @@ type AddonPrice={addon_id:string;size_name:string;price:number};
 type Link={product_id:string;addon_id:string};
 type Line={key:string;product_id:string;size_name:string;quantity:number;addon_ids:string[]};
 type Stage='customer'|'menu'|'payment';
+type ExistingBill={id:string;number:string;customerName:string;customerPhone:string};
 type Payment={upi_vpa:string;payee_name:string}|null;
 const money=(n:number)=>'₹'+Number(n).toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
 const green='bg-[#1b2822] text-white';
@@ -18,16 +19,19 @@ const primary='rounded-2xl bg-[#1b2822] px-5 py-3.5 font-semibold text-white tra
 function CounterIcon({children}:{children:ReactNode}){return <span aria-hidden="true" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#edf2ed] text-xl text-[#2a4432]">{children}</span>;}
 
 export default function CounterPOS({
- menuId,menuName,trackedIds,paymentSettings,businessName,onClose
-}:{menuId:string;menuName:string;trackedIds:string[];paymentSettings:Payment;businessName:string;onClose:()=>void}){
- const [stage,setStage]=useState<Stage>('customer');
- const [phone,setPhone]=useState('+91'),[name,setName]=useState('');
+ menuId,menuName,trackedIds,paymentSettings,businessName,onClose,existingBill,onSaveUnpaid
+}:{menuId:string;menuName:string;trackedIds:string[];paymentSettings:Payment;businessName:string;onClose:()=>void;existingBill?:ExistingBill;onSaveUnpaid?:()=>void}){
+ const [stage,setStage]=useState<Stage>(existingBill?'menu':'customer');
+ const [phone,setPhone]=useState(existingBill?.customerPhone||'+91'),[name,setName]=useState(existingBill?.customerName||'');
  const [products,setProducts]=useState<Product[]>([]),[addons,setAddons]=useState<Addon[]>([]),[addonPrices,setAddonPrices]=useState<AddonPrice[]>([]),[links,setLinks]=useState<Link[]>([]);
  const [loading,setLoading]=useState(true),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [query,setQuery]=useState(''),[category,setCategory]=useState('All');
  const [selected,setSelected]=useState<Product|null>(null),[selectedSize,setSelectedSize]=useState(''),[selectedAddons,setSelectedAddons]=useState<string[]>([]),[selectedQty,setSelectedQty]=useState(1);
  const [cart,setCart]=useState<Line[]>([]),[cartOpen,setCartOpen]=useState(false);
  const [orderNumber,setOrderNumber]=useState(''),[amount,setAmount]=useState<number|null>(null);
+ const [billingMode,setBillingMode]=useState<'pay_first'|'open_bill'>('pay_first');
+ const [defaultBillingMode,setDefaultBillingMode]=useState<'pay_first'|'open_bill'>('pay_first');
+ const [requestId,setRequestId]=useState(()=>crypto.randomUUID());
  const [paymentMethod,setPaymentMethod]=useState<'upi'|'cash'>('upi'),[reference,setReference]=useState(''),[paid,setPaid]=useState(false);
 
  useEffect(()=>{
@@ -54,6 +58,8 @@ export default function CounterPOS({
       setAddons(optionsBody.addons||[]);
       setAddonPrices(optionsBody.prices||[]);
       setLinks(optionsBody.links||[]);
+      const billingResponse=await fetch('/api/business-products?mode=orders',{headers:{Authorization:'Bearer '+token},signal:controller.signal});
+      if(billingResponse.ok){const bill=await billingResponse.json();setDefaultBillingMode(bill.billingMode==='open_bill'?'open_bill':'pay_first');setBillingMode(bill.billingMode==='open_bill'?'open_bill':'pay_first');}
     }
    }catch(e){if(active)setError(e instanceof Error?e.message:'Unable to load menu');}
    finally{if(active)setLoading(false);}
@@ -90,7 +96,7 @@ export default function CounterPOS({
 
  function exit(){
   if(busy)return;
-  if(stage==='payment'&&!paid&&!window.confirm('This order is saved but unpaid. Exit the POS anyway?'))return;
+  if(stage==='payment'&&!paid&&billingMode==='pay_first'&&!window.confirm('This order is saved but unpaid. Exit the POS anyway?'))return;
   if(stage==='menu'&&cart.length>0&&!window.confirm('Discard the unsaved cart and exit POS?'))return;
   onClose();
  }
@@ -118,7 +124,7 @@ export default function CounterPOS({
   const auth=await adminSupabase?.auth.getSession();
   const token=auth?.data.session?.access_token;
   if(!token)throw new Error('Your session expired. Sign in again.');
-  const response=await fetch('/api/business-products?mode=menus',{
+  const response=await fetch('/api/business-products?mode=orders',{
     method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)
   });
   const result=await response.json().catch(()=>null);
@@ -130,11 +136,13 @@ export default function CounterPOS({
   if(!cart.length||busy)return;
   setBusy(true);setError('');
   try{
-   const receipt=await authedPost({
-    action:'createCounterOrder',menuId,customerName:name.trim(),customerPhone:phone,
+   const response=await authedPost({
+    ...(existingBill?{action:'addItems',orderId:existingBill.id,requestId}:{action:'create',requestId,billingMode,menuId,customerName:name.trim(),customerPhone:phone}),
     items:cart.map(l=>({product_id:l.product_id,size_name:l.size_name,quantity:l.quantity,addon_ids:l.addon_ids}))
    });
-   if(typeof receipt.orderNumber!=='string'||!Number.isFinite(Number(receipt.amount))||Number(receipt.amount)<=0)throw new Error('Order was submitted, but receipt details could not be loaded. Check Live Orders before retrying.');
+   const receipt=response.result;
+   if(existingBill){if(!Number.isFinite(Number(receipt?.amount)))throw new Error('Bill was updated but the response was incomplete. Check Live Orders.');onClose();return;}
+   if(typeof receipt?.orderNumber!=='string'||!Number.isFinite(Number(receipt.amount))||Number(receipt.amount)<=0)throw new Error('Order was submitted, but receipt details could not be loaded. Check Live Orders before retrying.');
    setOrderNumber(receipt.orderNumber);setAmount(Number(receipt.amount));setPaymentMethod(paymentSettings?'upi':'cash');
    setCartOpen(false);setStage('payment');
   }catch(e){setError(e instanceof Error?e.message:'Could not place order');setCartOpen(true);}
@@ -145,13 +153,14 @@ export default function CounterPOS({
   if(!window.confirm('Have you independently verified receipt of '+money(amount||0)+' in the business account or cash drawer?'))return;
   setBusy(true);setError('');
   try{
-   await authedPost({action:'confirmCounterPayment',orderNumber,paymentMethod,transactionReference:reference.trim()});
+   if(billingMode==='open_bill')throw new Error('Open bills must be settled from Live Orders.');
+   await authedPost({action:'confirmPayment',orderNumber,paymentMethod,transactionReference:reference.trim()});
    setPaid(true);
   }catch(e){setError(e instanceof Error?e.message:'Could not confirm payment');}
   finally{setBusy(false);}
  }
  function newSale(){
-  setName('');setPhone('+91');setCart([]);setQuery('');setCategory('All');setOrderNumber('');setAmount(null);setReference('');setPaid(false);setPaymentMethod(paymentSettings?'upi':'cash');setError('');setStage('customer');
+  setRequestId(crypto.randomUUID());setBillingMode(defaultBillingMode);setName('');setPhone('+91');setCart([]);setQuery('');setCategory('All');setOrderNumber('');setAmount(null);setReference('');setPaid(false);setPaymentMethod(paymentSettings?'upi':'cash');setError('');setStage('customer');
  }
  const renderCart=(mobile:boolean)=><div className="flex h-full flex-col bg-white">
   <div className="flex items-center justify-between gap-3 border-b border-[#eeeae4] px-5 py-4">
@@ -180,10 +189,11 @@ export default function CounterPOS({
    }
   </div>
   <div className="space-y-3 border-t border-[#eeeae4] bg-[#faf9f6] p-4">
+   {existingBill&&<div className="border-b border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-semibold text-emerald-900">Add products to {existingBill.number} · {name} · {phone}</div>}
    {error&&<div role="alert" aria-live="assertive" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">Could not confirm order: {error}</div>}
    <div className="flex items-center justify-between text-sm text-zinc-500"><span>{count} item{count===1?'':'s'}</span><span>Subtotal</span></div>
    <div className="flex items-center justify-between text-2xl font-bold"><span>Total</span><span>{money(total)}</span></div>
-   <button type="button" className={primary+' w-full'} disabled={!cart.length||busy} onClick={()=>void placeOrder()}>{busy?'Placing order…':'Confirm Order · '+money(total)}</button>
+   <button type="button" className={primary+' w-full'} disabled={!cart.length||busy} onClick={()=>void placeOrder()}>{busy?'Saving…':existingBill?'Add to Bill · '+money(total):'Confirm Order · '+money(total)}</button>
    <p className="text-center text-[11px] leading-4 text-zinc-500">Final price is verified by BeanBook before payment.</p>
   </div>
  </div>;
@@ -204,7 +214,7 @@ export default function CounterPOS({
    {error&&<div role="alert" className="z-20 flex shrink-0 items-start justify-between gap-3 border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-800">
      <span>{error}</span><button type="button" aria-label="Dismiss error" onClick={()=>setError('')}>✕</button>
     </div>}
-   {stage==='customer'&&<div className="min-h-0 flex-1 overflow-y-auto px-4 py-7 sm:px-8 sm:py-12">
+   {stage==='customer'&&!existingBill&&<div className="min-h-0 flex-1 overflow-y-auto px-4 py-7 sm:px-8 sm:py-12">
      <div className="mx-auto max-w-5xl lg:grid lg:grid-cols-[0.9fr_1.1fr] lg:overflow-hidden lg:rounded-[28px] lg:bg-white lg:shadow-lg">
       <div className="hidden flex-col justify-between bg-[#233b2c] p-10 text-white lg:flex">
        <span className="text-sm font-semibold tracking-[0.18em] text-white/60">A FRESH SALE</span>
@@ -216,7 +226,7 @@ export default function CounterPOS({
        <label className="block space-y-2 text-sm font-semibold">Phone number <span className="text-red-700">*</span><input type="tel" inputMode="tel" autoComplete="tel" required className={input} value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+919876543210" /></label>
        <label className="block space-y-2 text-sm font-semibold">Customer name <span className="text-red-700">*</span><input type="text" autoComplete="name" required minLength={2} maxLength={120} className={input} value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Rahul" /></label>
        <button type="submit" className={primary+' flex w-full items-center justify-center gap-3'}>Continue to Menu <span aria-hidden="true">→</span></button>
-       <p className="text-xs leading-5 text-zinc-500">Details are used for the business's order record. No customer account required.</p>
+       <fieldset className="rounded-2xl border border-[#dce6da] bg-[#f7faf6] p-4"><legend className="px-2 text-sm font-bold">Payment timing for this bill</legend><div className="grid grid-cols-2 gap-3">{([['pay_first','Pay First','Pay before preparing'],['open_bill','Pay Later','Keep bill open']] as const).map(([value,title,detail])=><button key={value} type="button" aria-pressed={billingMode===value} onClick={()=>{setBillingMode(value);setRequestId(crypto.randomUUID());}} className={'rounded-xl border-2 p-3 text-left '+(billingMode===value?'border-[#29583b] bg-[#e5f2e7]':'border-zinc-200 bg-white')}><strong className="block text-sm">{title}</strong><span className="block text-xs text-zinc-600">{detail}</span></button>)}</div><p className="mt-2 text-xs text-zinc-500">The selection applies to this order only.</p></fieldset><p className="text-xs leading-5 text-zinc-500">Details are used for the business's order record. No customer account required.</p>
       </form>
      </div>
     </div>}
@@ -225,9 +235,9 @@ export default function CounterPOS({
      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-5 sm:px-7 sm:pt-7 lg:pb-8">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm">
        <div className="flex items-center gap-3"><CounterIcon>👤</CounterIcon><div><p className="text-sm font-bold">{name.trim()}</p><p className="text-xs text-zinc-500">{phone}</p></div></div>
-       <button type="button" onClick={()=>setStage('customer')} className="rounded-xl border border-[#e4e4db] px-4 py-2 text-sm font-semibold">Edit customer</button>
+       {!existingBill&&<button type="button" onClick={()=>setStage('customer')} className="rounded-xl border border-[#e4e4db] px-4 py-2 text-sm font-semibold">Edit customer</button>}
       </div>
-      <div className="mb-5"><h2 className="text-2xl font-bold sm:text-3xl">What can we get you?</h2><p className="mt-1 text-sm text-zinc-500">Choose a product and customize it for {name.trim()}.</p></div>
+      <div className="mb-5"><p className="mb-2 text-xs font-bold uppercase text-emerald-800">{billingMode==='open_bill'?'Pay Later · Open Bill':'Pay First · Close bill after payment'}</p><h2 className="text-2xl font-bold sm:text-3xl">What can we get you?</h2><p className="mt-1 text-sm text-zinc-500">Choose a product and customize it for {name.trim()}.</p></div>
       <label className="mb-5 flex items-center gap-3 rounded-2xl border border-[#e2e3dc] bg-white px-4 py-3 shadow-sm">
        <span className="text-xl text-[#65826f]" aria-hidden="true">⌕</span><input type="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search products…" className="min-w-0 flex-1 bg-transparent text-base outline-none" aria-label="Search products"/>
        {query&&<button type="button" className="text-sm text-zinc-500" onClick={()=>setQuery('')}>Clear</button>}
@@ -271,7 +281,7 @@ export default function CounterPOS({
        <p className="mt-3 break-all text-sm text-zinc-500">{orderNumber} · {name}</p>
        <span className={'mt-4 inline-flex rounded-full px-3 py-1.5 text-xs font-bold '+(paid?'bg-green-100 text-green-900':'bg-amber-100 text-amber-900')}>{paid?'Payment received':'Awaiting payment'}</span>
       </div>
-      {paid?<div className="space-y-4 rounded-3xl border border-[#bedfc4] bg-white p-6 text-center sm:p-8">
+      {billingMode==='open_bill'&&!paid?<div className="space-y-4 rounded-3xl bg-white p-6 text-center"><h3 className="text-xl font-bold">Open bill created</h3><p className="text-sm text-zinc-600">Preparation can begin now. Add items and settle the final amount from Live Orders.</p><button type="button" className={primary} onClick={onClose}>Return to workspace</button></div>:paid?<div className="space-y-4 rounded-3xl border border-[#bedfc4] bg-white p-6 text-center sm:p-8">
         <div className="text-5xl" aria-hidden="true">🎉</div><h3 className="text-2xl font-bold text-[#1b5032]">Payment recorded successfully!</h3>
         <p className="text-sm text-zinc-600">The order is paid and ready for the café's next fulfillment step.</p>
         <button type="button" onClick={newSale} className={primary+' w-full sm:w-auto'}>+ Start New Sale</button>
@@ -297,7 +307,7 @@ export default function CounterPOS({
          </div>
         </section>
        </div>}
-      {!paid&&<div className="text-center"><button type="button" onClick={exit} className="rounded-xl border border-[#deded7] bg-white px-5 py-3 text-sm font-semibold">Exit and leave order pending</button></div>}
+      {!paid&&billingMode==='pay_first'&&<div className="text-center"><button type="button" onClick={()=>{if(window.confirm('This order is saved as unpaid. Preparation stays blocked until payment is collected. Return to Live Orders?'))(onSaveUnpaid??onClose)();}} className="rounded-xl border border-[#deded7] bg-white px-5 py-3 text-sm font-semibold">Save as Unpaid & Return to Orders</button></div>}
      </div>
     </div>}
    {selected&&<div className="fixed inset-0 z-[140] flex items-end justify-center bg-black/60 sm:items-center sm:p-5" role="dialog" aria-modal="true" aria-label={'Customize '+selected.name}>

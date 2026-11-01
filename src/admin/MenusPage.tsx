@@ -14,7 +14,7 @@ const money=(n:number)=>'₹'+n.toLocaleString('en-IN',{maximumFractionDigits:2}
 const input='w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm';
 const action='rounded-xl bg-[#1b2822] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50';
 const blank:Data={paymentSettings:null,businessName:'',menus:[],items:[],sizes:[],overrides:[],products:[]};
-export default function MenusPage(){
+export default function MenusPage({onReturnToLiveOrders}:{onReturnToLiveOrders:()=>void}){
  const [data,setData]=useState<Data>(blank),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const [kind,setKind]=useState<'regular'|'event'>('regular'),[name,setName]=useState(''),[location,setLocation]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
  const qrRef=useRef<HTMLDivElement>(null);
@@ -145,7 +145,7 @@ export default function MenusPage(){
     <p className="text-xs text-amber-800">{selectedMenu.status==='published'?'Changes take effect immediately. Existing paid orders retain their charged prices.':'Save changes before publishing.'}</p>
    </>:<p className="text-sm text-zinc-500">Menu cannot be edited in its current state.</p>}
    </div>}
-  {posMenuId&&<CounterPOS key={posMenuId} businessName={data.businessName} menuId={posMenuId} menuName={data.menus.find(m=>m.id===posMenuId)?.name||'Menu'} paymentSettings={data.paymentSettings} trackedIds={data.items.filter(i=>i.event_id===posMenuId&&i.inventory_tracking).map(i=>i.product_id)} onClose={()=>setPosMenuId(null)}/>}
+  {posMenuId&&<CounterPOS key={posMenuId} businessName={data.businessName} menuId={posMenuId} menuName={data.menus.find(m=>m.id===posMenuId)?.name||'Menu'} paymentSettings={data.paymentSettings} trackedIds={data.items.filter(i=>i.event_id===posMenuId&&i.inventory_tracking).map(i=>i.product_id)} onClose={()=>setPosMenuId(null)} onSaveUnpaid={onReturnToLiveOrders}/>}
   {activatedMenu&&<section className="space-y-4 rounded-2xl border border-emerald-200 bg-white p-6" role="status">
     <div className="text-3xl" aria-hidden="true">✓</div><h3 className="text-xl font-semibold text-emerald-800">Menu activated successfully!</h3>
     <p className="text-sm text-zinc-600">{activatedMenu.name} now has its own public link and QR code. You can print this QR for your customers.</p>
