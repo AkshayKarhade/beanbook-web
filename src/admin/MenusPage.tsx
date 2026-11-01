@@ -99,15 +99,26 @@ export default function MenusPage(){
     {kind==='event'&&<div className="grid gap-3 sm:grid-cols-2"><label className="text-sm font-medium">Start date<input type="date" className={input+' mt-2'} value={start} onChange={e=>setStart(e.target.value)} required/></label><label className="text-sm font-medium">End date<input type="date" className={input+' mt-2'} min={start} value={end} onChange={e=>setEnd(e.target.value)} required/></label></div>}
     <div className="flex gap-2"><button disabled={busy} className={action}>{busy?'Creating…':'Create Draft'}</button><button type="button" className="rounded-xl border px-4 py-2" onClick={()=>setShowCreate(false)}>Cancel</button></div>
    </form>}
-  <div className="grid gap-3 md:grid-cols-2">{data.menus.filter(m=>m.sales_mode===tab).map(m=><button type="button" key={m.id} onClick={()=>{setActivated(m.status==='published'?m.id:null);if(m.status==='draft')open(m);else setSelected(null);}} className={'rounded-2xl border bg-white p-5 text-left '+(selected===m.id?'border-emerald-700 ring-2 ring-emerald-100':'border-zinc-200')}>
-     <div className="flex items-center justify-between"><strong>{m.name}</strong><span className="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-900">{m.status}</span></div>
-     <p className="mt-2 text-sm text-zinc-500">{m.sales_mode==='regular'?'Regular Sales':'Event'} · {data.items.filter(i=>i.event_id===m.id).length} products</p>
-     {m.event_start_date&&<p className="mt-1 text-xs text-zinc-500">{m.event_start_date} to {m.event_end_date}</p>}
-    </button>)}</div>
-  <div className="grid gap-3 sm:grid-cols-2">{data.menus.filter(m=>m.sales_mode===tab).map(m=><div key={m.id} className="flex flex-wrap items-center gap-2 rounded-xl border bg-white p-3">
-   {m.status==='published'&&<><button type="button" className="rounded-lg bg-[#1b2822] px-3 py-2 text-sm font-semibold text-white" onClick={()=>{setPosMenuId(m.id);setActivated(null);setSelected(null);}}>Open Counter POS</button><button type="button" className="rounded-lg border px-3 py-2 text-sm" onClick={()=>{setPosMenuId(null);setActivated(m.id);setSelected(null);}}>View QR & Link</button></>}
-   <button type="button" disabled={busy} className="rounded-lg border border-red-200 px-3 py-2 text-sm text-red-800 disabled:opacity-50" onClick={()=>void deleteMenu(m)}>Delete Menu</button>
-  </div>)}</div>
+  <div className="grid gap-4 md:grid-cols-2">
+    {data.menus.filter(m=>m.sales_mode===tab).map(m=><article key={m.id} className={'flex flex-col justify-between gap-4 rounded-2xl border bg-white p-5 shadow-sm '+(selected===m.id||activated===m.id||posMenuId===m.id?'border-emerald-600 ring-2 ring-emerald-100':'border-zinc-200')}>
+     <div>
+      <div className="flex items-start justify-between gap-3">
+       <h4 className="font-semibold text-[#1b2822]">{m.name}</h4>
+       <span className={'shrink-0 rounded-full px-3 py-1 text-xs font-medium '+(m.status==='published'?'bg-emerald-100 text-emerald-900':'bg-amber-100 text-amber-900')}>{m.status==='published'?'Published':'Draft'}</span>
+      </div>
+      <p className="mt-2 text-sm text-zinc-500">{m.sales_mode==='regular'?'Regular Sales':'Event'} · {data.items.filter(i=>i.event_id===m.id).length} product{data.items.filter(i=>i.event_id===m.id).length===1?'':'s'}</p>
+      {m.event_start_date&&<p className="mt-1 text-xs text-zinc-500">{m.event_start_date} to {m.event_end_date}</p>}
+      {m.location&&<p className="mt-1 text-xs text-zinc-500">{m.location}</p>}
+     </div>
+     <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-4">
+      {m.status==='draft'?<button type="button" disabled={busy} className="rounded-xl bg-[#1b2822] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={()=>{setPosMenuId(null);setActivated(null);open(m);}}>Edit Draft</button>:<>
+       <button type="button" className="rounded-xl bg-[#1b2822] px-4 py-2 text-sm font-semibold text-white" onClick={()=>{setPosMenuId(m.id);setActivated(null);setSelected(null);}}>Open Counter POS</button>
+       <button type="button" className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium" onClick={()=>{setPosMenuId(null);setActivated(m.id);setSelected(null);}}>View QR & Link</button>
+      </>}
+      <button type="button" disabled={busy} aria-label={'Delete '+m.name} className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-800 disabled:opacity-50" onClick={()=>void deleteMenu(m)}>Delete</button>
+     </div>
+    </article>)}
+  </div>
   {!data.menus.some(m=>m.sales_mode===tab)&&!showCreate&&<p className="rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-zinc-500">No menus in this section yet. Create a menu for a location or event; existing CRAG and Direct Sales flows are unchanged.</p>}
   {selectedMenu&&<div className="space-y-4 rounded-2xl border bg-white p-5">
     <div className="flex justify-between gap-3"><div><h4 className="text-lg font-semibold">{selectedMenu.name}</h4><p className="text-sm text-zinc-500">Draft menu editor · {selectedMenu.sales_mode==='regular'?'Product Library prices':'Optional event-specific prices'}</p></div><button type="button" onClick={()=>setSelected(null)} className="text-sm underline">Close</button></div>
