@@ -74,3 +74,70 @@ body {
     page-break-inside: avoid;
   }
 }
+
+
+/* BeanBook Roasted Walnut workspace theme.
+   Visual-only overrides, intentionally scoped to authenticated business workspace.
+   Preserve native action states, statuses, layout, and print styles. */
+.bb-workspace {
+  --bb-walnut: #4a3026;
+  --bb-walnut-hover: #634638;
+  --bb-caramel: #a97855;
+  --bb-cream: #faf6f0;
+  --bb-ivory: #fffdf9;
+  --bb-border: #e8dcd1;
+  --bb-ink: #34271f;
+  background-color: var(--bb-cream);
+  color: var(--bb-ink);
+}
+.bb-workspace > aside {
+  background: var(--bb-walnut);
+  border-color: #76594b;
+}
+.bb-workspace > aside nav button[aria-current="page"] {
+  background: #a97855;
+  color: #fffdf9;
+}
+.bb-workspace > aside nav button:not([aria-current="page"]):hover {
+  background: #ffffff1a;
+  color: #fffdf9;
+}
+.bb-workspace > aside nav button:not([aria-current="page"]) {
+  color: #f0dfd1;
+}
+.bb-workspace main > div > div > p:first-child[class*="tracking-"] {
+  color: #946d55;
+}
+.bb-workspace :is(article, section, div)[class*="bg-white"] {
+  background-color: var(--bb-ivory);
+}
+.bb-workspace [class*="border-[#e6e3dc]"],
+.bb-workspace [class*="border-[#e4e9e0]"] {
+  border-color: var(--bb-border);
+}
+.bb-workspace [class*="bg-[#fafbf9]"],
+.bb-workspace [class*="bg-[#f4f7f2]"] {
+  background-color: #f8f0e8;
+}
+.bb-workspace button[class*="bg-[#1b2822]"] {
+  background-color: var(--bb-walnut);
+  color: #fffdf9;
+}
+.bb-workspace button[class*="bg-[#1b2822]"]:hover:not(:disabled) {
+  background-color: var(--bb-walnut-hover);
+}
+.bb-workspace button[class*="bg-white"]:not([aria-current="page"]) {
+  background-color: #fcf6ef;
+}
+.bb-workspace :is(button, input, select, textarea):focus-visible {
+  outline-color: #a97855;
+}
+.bb-workspace input:not([type="checkbox"]):not([type="radio"]),
+.bb-workspace select,
+.bb-workspace textarea {
+  border-color: #ddcfc2;
+}
+.bb-workspace [class*="text-[#6b8974]"],
+.bb-workspace [class*="text-[#688b75]"] {
+  color: #946d55;
+}
