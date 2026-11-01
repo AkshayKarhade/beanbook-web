@@ -15,16 +15,17 @@ export default async function salesMenus(req:Request){
   if(!membership||membership.role!=='owner')return json({error:'Business owner access required'},403);
   const brandId=membership.brand_id as string;
   if(req.method==='GET'){
-   const [events,assignments,sizes,overrides,products,brand]=await Promise.all([
+   const [events,assignments,sizes,overrides,products,brand,payment]=await Promise.all([
     db.from('events').select('id,name,slug,sales_mode,status,event_start_date,event_end_date,location,ordering_closes_at').eq('brand_id',brandId) .in('sales_mode',['regular','event']).neq('status','deleted').order('created_at',{ascending:false}),
     db.from('event_products').select('id,event_id,product_id,display_order,price_override,inventory_tracking,events!inner(brand_id,sales_mode)').eq('events.brand_id',brandId).in('events.sales_mode',['regular','event']).order('display_order'),
     db.from('product_sizes').select('product_id,name,price,display_order').eq('brand_id',brandId),
     db.from('event_product_size_prices').select('event_product_id,size_name,price').eq('brand_id',brandId),
     db.from('products').select('id,name,price,is_active').eq('brand_id',brandId).order('name'),
-    db.from('brands').select('name').eq('id',brandId).single()
+    db.from('brands').select('name').eq('id',brandId).single(),
+    db.from('business_payment_settings').select('upi_vpa,payee_name').eq('brand_id',brandId).maybeSingle()
    ]);
-   for(const r of [events,assignments,sizes,overrides,products,brand])if(r.error)throw r.error;
-   return json({businessName:brand.data.name,menus:events.data||[],items:(assignments.data||[]).map(({events:ignored,...item})=>{void ignored;return item;}),sizes:sizes.data||[],overrides:overrides.data||[],products:products.data||[]});
+   for(const r of [events,assignments,sizes,overrides,products,brand,payment])if(r.error)throw r.error;
+   return json({businessName:brand.data.name,paymentSettings:payment.data||null,menus:events.data||[],items:(assignments.data||[]).map(({events:ignored,...item})=>{void ignored;return item;}),sizes:sizes.data||[],overrides:overrides.data||[],products:products.data||[]});
   }
   if(!(req.headers.get('content-type')||'').includes('application/json'))return json({error:'JSON required'},415);
   const raw=await req.text();if(raw.length>26000)return json({error:'Request too large'},413);
@@ -50,11 +51,27 @@ export default async function salesMenus(req:Request){
    if(error){if(error.code==='22023')return json({error:error.message},400);throw error;}
    return json({ok:true,menuId:data});
   }
+  if(body.action==='savePaymentSettings'){
+   const upi=typeof body.upiVpa==='string'?body.upiVpa.trim():'';
+   const payee=typeof body.payeeName==='string'?body.payeeName.trim():'';
+   if(!/^[a-z0-9._-]{2,100}@[a-z0-9.-]{2,64}$/i.test(upi)||payee.length<2||payee.length>120)return json({error:'Enter a valid business UPI ID and payee name'},400);
+   const {error}=await db.from('business_payment_settings').upsert({brand_id:brandId,upi_vpa:upi,payee_name:payee,updated_at:new Date().toISOString()});
+   if(error)throw error;return json({ok:true});
+  }
+  if(body.action==='confirmCounterPayment'){
+   if(typeof body.orderNumber!=='string'||!/^BB-POS-[A-F0-9]{12}$/.test(body.orderNumber))return json({error:'Invalid counter order'},400);
+   const method=body.paymentMethod;
+   if(method!=='cash'&&method!=='upi')return json({error:'Invalid payment method'},400);
+   const reference=typeof body.transactionReference==='string'?body.transactionReference.trim():null;
+   const {data,error}=await db.rpc('beanbook_confirm_counter_payment',{p_brand_id:brandId,p_order_number:body.orderNumber,p_staff_user:identity.user.id,p_payment_method:method,p_reference:reference});
+   if(error){if(error.code==='22023'||error.code==='23505')return json({error:error.message},400);throw error;}
+   return json({ok:true,status:data});
+  }
   if(body.action==='createCounterOrder'){
    if(!uuid(body.menuId)||typeof body.customerName!=='string'||typeof body.customerPhone!=='string'||!Array.isArray(body.items)||body.items.length>30)return json({error:'Invalid counter order'},400);
-   const {data,error}=await db.rpc('beanbook_create_counter_order',{p_brand_id:brandId,p_menu_id:body.menuId,p_name:body.customerName,p_phone:body.customerPhone,p_items:body.items});
+   const {data,error}=await db.rpc('beanbook_create_counter_order_v2',{p_brand_id:brandId,p_menu_id:body.menuId,p_name:body.customerName,p_phone:body.customerPhone,p_items:body.items});
    if(error){if(error.code==='22023')return json({error:error.message},400);throw error;}
-   return json({ok:true,orderNumber:data});
+   return json({ok:true,...data});
   }
   if(body.action==='deleteMenu'){
    if(!uuid(body.menuId))return json({error:'Invalid menu'},400);
