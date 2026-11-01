@@ -13,6 +13,9 @@ export default function ActivationPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
+  const [tier, setTier] = useState<'base' | 'growth' | 'complete'>('growth');
+  const tiers = [{ id: 'base', name: 'Base', price: 499, description: 'Menus, billing and events' }, { id: 'growth', name: 'Growth', price: 999, description: 'Base + customer management, ledger inventory and analytics' }, { id: 'complete', name: 'Complete', price: 1499, description: 'Full suite, early access, teams, locations and advanced recipes' }] as const;
+  const selectedTier = tiers.find(item => item.id === tier)!;
 
   useEffect(() => {
     let active = true;
@@ -75,7 +78,7 @@ export default function ActivationPage() {
       const checkpoint = await fetch('/api/business-onboarding', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + auth.session.access_token },
-        body: JSON.stringify({ action: 'credentials-set' }),
+        body: JSON.stringify({ action: 'credentials-set', pilotTier: tier }),
       });
       if (!checkpoint.ok) {
         throw new Error('Password saved, but the activation checkpoint could not be recorded. Sign in with your new password and contact BeanBook support.');
@@ -109,6 +112,7 @@ export default function ActivationPage() {
           <p className="mt-1 text-sm font-medium text-emerald-800">Role: {BUSINESS_ADMIN_ROLE_LABEL}</p>
           <p className="mt-2 text-sm leading-6 text-zinc-500">Activate your BeanBook business account for {account.email} by choosing your own password.</p>
           <section aria-label="Business Admin privileges" className="mt-5 rounded-xl border border-zinc-200 bg-[#f5f3ef] p-4"><h2 className="font-semibold">Your business privileges</h2><ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-700">{BUSINESS_ADMIN_PRIVILEGES.map(privilege=><li key={privilege}>{privilege}</li>)}</ul><p className="mt-3 text-xs leading-5 text-zinc-600">{BUSINESS_ADMIN_SCOPE_NOTE}</p></section>
+          <section aria-label="Pilot plan selection" className="mt-6 rounded-2xl border border-[#e9dcd0] bg-[#faf7f2] p-4"><p className="text-xs font-bold uppercase tracking-widest text-[#a97855]">🎉 Founding pilot invitation</p><h2 className="mt-2 text-xl font-bold">Your pilot access is on us!</h2><p className="mt-2 text-sm text-zinc-600">Choose the plan you would like to explore. Pilot access is complimentary for 60 days, subject to your invitation terms. Planned features will be released as they become available.</p><div className="mt-4 space-y-2">{tiers.map(item => <label key={item.id} className={'flex cursor-pointer items-start gap-3 rounded-xl border p-3 ' + (tier === item.id ? 'border-[#a97855] bg-white' : 'border-[#e9dcd0]')}><input type="radio" name="pilot-tier" value={item.id} checked={tier === item.id} onChange={() => setTier(item.id)} className="mt-1"/><span><strong>{item.name} · ₹{item.price.toLocaleString('en-IN')}/login user/month</strong><span className="block text-xs text-zinc-600">{item.description}</span></span></label>)}</div><div className="mt-4 rounded-xl bg-[#f1e7dd] p-4"><p className="text-sm font-semibold">🎁 Your 60-day pilot saving</p><p className="text-3xl font-extrabold text-[#4a3026]">₹{(selectedTier.price * 2).toLocaleString('en-IN')}</p><p className="text-xs text-zinc-600">Per login user, compared with two months at the indicative monthly plan price. No subscription or automatic billing is started by this selection.</p></div></section>
           <form className="mt-6 space-y-4" onSubmit={activate}>
             <div><label htmlFor="activate-password" className="mb-2 block text-sm font-medium">Create password</label>
             <input id="activate-password" type="password" autoComplete="new-password" minLength={12} maxLength={200} required value={password} onChange={e=>setPassword(e.target.value)} className="w-full rounded-xl border border-zinc-200 px-4 py-3" /></div>
