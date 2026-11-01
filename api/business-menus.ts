@@ -50,6 +50,12 @@ export default async function salesMenus(req:Request){
    if(error){if(error.code==='22023')return json({error:error.message},400);throw error;}
    return json({ok:true,menuId:data});
   }
+  if(body.action==='createCounterOrder'){
+   if(!uuid(body.menuId)||typeof body.customerName!=='string'||typeof body.customerPhone!=='string'||!Array.isArray(body.items)||body.items.length>30)return json({error:'Invalid counter order'},400);
+   const {data,error}=await db.rpc('beanbook_create_counter_order',{p_brand_id:brandId,p_menu_id:body.menuId,p_name:body.customerName,p_phone:body.customerPhone,p_items:body.items});
+   if(error){if(error.code==='22023')return json({error:error.message},400);throw error;}
+   return json({ok:true,orderNumber:data});
+  }
   if(body.action==='deleteMenu'){
    if(!uuid(body.menuId))return json({error:'Invalid menu'},400);
    // Soft deletion preserves existing order references and audit history.
