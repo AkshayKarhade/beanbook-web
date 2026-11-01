@@ -71,7 +71,7 @@ export default async function businessProducts(request: Request) {
     }
     // brand_id is derived exclusively from a verified server-side membership.
     const brandId: string = membership.brand_id;
-    const selectFields = 'id,name,description,price,is_active,created_at';
+    const selectFields = 'id,name,description,price,is_active,created_at,category';
 
     if (request.method === 'GET') {
       const { data, error } = await admin.from('products')
@@ -109,6 +109,8 @@ export default async function businessProducts(request: Request) {
         (editingId != null && !validUuid(editingId))) {
         return json({ error: 'Invalid product configuration.' }, 400);
       }
+      const category = typeof body.category === 'string' ? body.category.trim() : '';
+      if(category.length>60 || (body.category != null && typeof body.category !== 'string')) return json({error:'Category must be at most 60 characters.'},400);
       const numeric = Number(body.price);
       if (!Number.isFinite(numeric) || numeric <= 0 || numeric > 100000 ||
           Math.abs(numeric * 100 - Math.round(numeric * 100)) > 0.00001) {
@@ -124,6 +126,8 @@ export default async function businessProducts(request: Request) {
           return json({ error: saveError.message }, 400);
         throw saveError;
       }
+      const {error:categoryError}=await admin.from('products').update({category:category||null}).eq('id',saved).eq('brand_id',brandId);
+      if(categoryError) throw categoryError;
       return json({ ok: true, productId: saved });
     }
 
