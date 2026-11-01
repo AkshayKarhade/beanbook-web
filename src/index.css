@@ -5,3 +5,103 @@
 body {
   @apply bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100;
 }
+/* Immediate feedback shared by all native and button-like controls. */
+:where(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]) {
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease, background-color 140ms ease, border-color 140ms ease;
+  -webkit-tap-highlight-color: rgba(28, 73, 46, 0.14);
+}
+:where(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]):not(:disabled):not([aria-disabled="true"]):active {
+  transform: scale(0.97);
+  filter: brightness(0.9);
+}
+:where(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]):focus-visible {
+  outline: 3px solid #5b9d72;
+  outline-offset: 3px;
+}
+:where(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]).bb-click-feedback:not(:disabled):not([aria-disabled="true"]) {
+  animation: bb-click-ack 300ms ease-out;
+}
+@keyframes bb-click-ack {
+  0% { filter: brightness(0.83); box-shadow: 0 0 0 0 rgba(37, 105, 67, 0.24); }
+  65% { filter: brightness(1.05); box-shadow: 0 0 0 4px rgba(37, 105, 67, 0.14); }
+  100% { filter: brightness(1); box-shadow: 0 0 0 0 transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]) { transition: none; }
+  :where(button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"]).bb-click-feedback { animation: none; filter: brightness(0.88); outline: 2px solid #5b9d72; }
+}
+
+/* The printable receipt is portaled directly into document.body, outside #root. */
+#bb-print-receipt {
+  display: none;
+  box-sizing: border-box;
+  width: 55mm;
+  padding: 2mm 2.5mm 3mm;
+  background: #fff;
+  color: #000;
+  font: 11px/1.4 Arial, sans-serif;
+  overflow-wrap: anywhere;
+}
+#bb-print-receipt.bb-receipt-measure {
+  display: block;
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  visibility: hidden;
+}
+.receipt-center { text-align: center; }
+.receipt-heading { font-size: 14px; font-weight: bold; }
+.receipt-rule { border-top: 1px dashed black; margin: 7px 0; }
+.receipt-line { margin: 6px 0; break-inside: avoid; }
+.receipt-subline { font-size: 10px; margin-left: 10px; }
+.receipt-right { text-align: right; }
+.receipt-total { display: flex; justify-content: space-between; gap: 5px; font-size: 13px; font-weight: bold; }
+.receipt-footer { margin-top: 12px; }
+@media print {
+  /* The dynamic @page style inserted before print sets width=55mm and
+     the height measured from the actual rendered receipt. */
+  @page { size: 55mm 160mm; margin: 0; }
+  html, body { width: 55mm !important; min-width: 0 !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
+  body > :not(#bb-print-receipt) { display: none !important; }
+  #bb-print-receipt {
+    display: block !important;
+    position: static !important;
+    width: 55mm !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
+/* BeanBook marketing-site palette, scoped to the authenticated workspace only.
+   No layout, state, event handlers, checkout, or receipt changes. */
+.bb-app-theme {
+  --bb-walnut: #4a3026;
+  --bb-cream: #faf7f2;
+  --bb-ivory: #fffdf9;
+  --bb-caramel: #a97855;
+  --bb-sand: #f1e7dd;
+  --bb-border: #e9dcd0;
+  background: var(--bb-cream);
+  color: #39291f;
+}
+.bb-app-theme > aside { background: var(--bb-walnut); border-color: #725445; }
+.bb-app-theme > aside nav button[aria-current="page"] { background: #ffffff26; color: #fffdf9; }
+.bb-app-theme > aside nav button:not([aria-current="page"]) { color: #e7d5c9; }
+.bb-app-theme > aside nav button:not([aria-current="page"]):hover { background: #ffffff18; color: white; }
+.bb-app-theme main [class*="bg-white"] { background-color: var(--bb-ivory); }
+.bb-app-theme main [class*="bg-[#f5f3ef]"],
+.bb-app-theme main [class*="bg-[#f4f7f2]"],
+.bb-app-theme main [class*="bg-[#fafbf9]"] { background-color: #f5ece3; }
+.bb-app-theme main [class*="border-[#e6e3dc]"],
+.bb-app-theme main [class*="border-[#e4e9e0]"] { border-color: var(--bb-border); }
+.bb-app-theme main button[class*="bg-[#1b2822]"],
+.bb-app-theme main button[class*="bg-zinc-900"] { background-color: var(--bb-walnut); color: white; }
+.bb-app-theme main button[class*="bg-[#1b2822]"]:hover:not(:disabled),
+.bb-app-theme main button[class*="bg-zinc-900"]:hover:not(:disabled) { background-color: #654639; }
+.bb-app-theme main button[class*="bg-white"] { background-color: #fff9f2; }
+.bb-app-theme main [class*="text-[#6b8974]"],
+.bb-app-theme main [class*="text-[#688b75]"] { color: #946b50; }
+.bb-app-theme :is(button,input,select,textarea):focus-visible { outline-color: var(--bb-caramel); }
