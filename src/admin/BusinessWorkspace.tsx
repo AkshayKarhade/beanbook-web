@@ -42,7 +42,7 @@ export default function BusinessWorkspace() {
       });
       const contentType = response.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) {
-        throw new Error('Account confirmation service is unavailable (HTTP ' + response.status + '). Please check the preview deployment.');
+        throw new Error('Account confirmation service is unavailable (HTTP ' + response.status + '). Please try again or contact support.');
       }
       const result = await response.json() as { status?: string; error?: string };
       if (!response.ok) throw new Error(result.error || 'Account confirmation is pending.');
@@ -64,9 +64,9 @@ export default function BusinessWorkspace() {
     return (
       <div className="min-h-screen bg-[#f5f3ef] px-5 py-20 text-zinc-900">
         <div className="mx-auto max-w-lg rounded-3xl border border-amber-200 bg-white p-9 shadow-sm">
-          <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">Preview setup required</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">Service configuration required</span>
           <h1 className="mt-3 text-3xl font-semibold">Connect a test workspace</h1>
-          <p className="mt-4 leading-7 text-zinc-600">The admin configuration is missing. Connect this preview to your authorized Supabase project using the existing VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY environment variables. Business access is controlled by authenticated membership and database policies.</p>
+          <p className="mt-4 leading-7 text-zinc-600">BeanBook is temporarily unavailable because its workspace connection is not configured. Please contact the BeanBook administrator.</p>
           <p className="mt-4 text-sm text-zinc-500">No demo credentials are embedded in this application.</p>
           <Link to="/" className="mt-6 inline-block text-sm font-semibold text-emerald-800 underline">Return to BeanBook</Link>
         </div>
