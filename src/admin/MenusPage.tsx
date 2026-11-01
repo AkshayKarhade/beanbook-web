@@ -8,13 +8,14 @@ type Product={id:string;name:string;price:number;is_active:boolean};
 type Size={product_id:string;name:string;price:number;display_order:number};
 type Assignment={id:string;event_id:string;product_id:string;display_order:number;price_override:number|null;inventory_tracking:boolean};
 type Override={event_product_id:string;size_name:string;price:number};
-type Data={businessName:string;menus:Menu[];items:Assignment[];sizes:Size[];overrides:Override[];products:Product[]};
+type Data={paymentSettings:{upi_vpa:string;payee_name:string}|null;businessName:string;menus:Menu[];items:Assignment[];sizes:Size[];overrides:Override[];products:Product[]};
 type ItemDraft={product_id:string;track_inventory:boolean;price_override:number|null;size_overrides:Record<string,number>};
 const money=(n:number)=>'₹'+n.toLocaleString('en-IN',{maximumFractionDigits:2});
 const input='w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm';
 const action='rounded-xl bg-[#1b2822] px-4 py-3 text-sm font-semibold text-white disabled:opacity-50';
-const blank:Data={businessName:'',menus:[],items:[],sizes:[],overrides:[],products:[]};
+const blank:Data={paymentSettings:null,businessName:'',menus:[],items:[],sizes:[],overrides:[],products:[]};
 export default function MenusPage(){
+ const [upi,setUpi]=useState(''),[payee,setPayee]=useState('');
  const [data,setData]=useState<Data>(blank),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
  const [kind,setKind]=useState<'regular'|'event'>('regular'),[name,setName]=useState(''),[location,setLocation]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState('');
  const qrRef=useRef<HTMLDivElement>(null);
@@ -32,7 +33,7 @@ export default function MenusPage(){
   const body=await res.json();if(!res.ok)throw new Error(body.error||'Could not manage menu');
   return body;
  },[]);
- const reload=useCallback(async()=>{setData(await request());},[request]);
+ const reload=useCallback(async()=>{const d=await request();setData(d);setUpi(d.paymentSettings?.upi_vpa||'');setPayee(d.paymentSettings?.payee_name||'');},[request]);
  useEffect(()=>{void reload().catch(e=>setError(e instanceof Error?e.message:String(e)));},[reload]);
  const open=(menu:Menu)=>{
   setSelected(menu.id);setError('');setMessage('');
@@ -62,9 +63,10 @@ export default function MenusPage(){
  async function save(){if(!selectedMenu)return;setBusy(true);setError('');setMessage('');
   try{
    await request({action:'saveDraftItems',menuId:selectedMenu.id,items:draft});
-   await reload();setMessage('Draft menu saved. Review products and publish to activate its public URL and QR code.');
+   await reload();setMessage(selectedMenu.status==='published'?'Published menu updated; existing URL and QR remain valid.':'Draft menu saved. Review products and publish to activate its public URL and QR code.');
   }catch(e){setError(e instanceof Error?e.message:String(e));}finally{setBusy(false);}
  }
+ async function saveUPI(){setBusy(true);setError('');try{await request({action:'savePaymentSettings',upiVpa:upi,payeeName:payee});await reload();setMessage('Business UPI details saved.');}catch(e){setError(e instanceof Error?e.message:'Could not save UPI details');}finally{setBusy(false);}}
  async function deleteMenu(menu:Menu){
   if(!window.confirm('Remove "'+menu.name+'"? Its QR link will stop working. Previous orders remain in history.'))return;
   setBusy(true);setError('');setMessage('');
@@ -112,6 +114,7 @@ export default function MenusPage(){
      </div>
      <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-4">
       {m.status==='draft'?<button type="button" disabled={busy} className="rounded-xl bg-[#1b2822] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" onClick={()=>{setPosMenuId(null);setActivated(null);open(m);}}>Edit Draft</button>:<>
+       <button type="button" className="rounded-xl border px-4 py-2 text-sm" onClick={()=>{setPosMenuId(null);setActivated(null);open(m);}}>Edit Menu</button>
        <button type="button" className="rounded-xl bg-[#1b2822] px-4 py-2 text-sm font-semibold text-white" onClick={()=>{setPosMenuId(m.id);setActivated(null);setSelected(null);}}>Open Counter POS</button>
        <button type="button" className="rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium" onClick={()=>{setPosMenuId(null);setActivated(m.id);setSelected(null);}}>View QR & Link</button>
       </>}
@@ -122,7 +125,7 @@ export default function MenusPage(){
   {!data.menus.some(m=>m.sales_mode===tab)&&!showCreate&&<p className="rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-zinc-500">No menus in this section yet. Create a menu for a location or event; existing CRAG and Direct Sales flows are unchanged.</p>}
   {selectedMenu&&<div className="space-y-4 rounded-2xl border bg-white p-5">
     <div className="flex justify-between gap-3"><div><h4 className="text-lg font-semibold">{selectedMenu.name}</h4><p className="text-sm text-zinc-500">Draft menu editor · {selectedMenu.sales_mode==='regular'?'Product Library prices':'Optional event-specific prices'}</p></div><button type="button" onClick={()=>setSelected(null)} className="text-sm underline">Close</button></div>
-    {selectedMenu.status==='draft'?<><p className="text-sm text-zinc-500">Select products for this menu. Each selected product can be tracked individually for inventory. For events, override only the prices that differ from the Product Library.</p>
+    {['draft','published'].includes(selectedMenu.status)?<><p className="text-sm text-zinc-500">Select products for this menu. Each selected product can be tracked individually for inventory. For events, override only the prices that differ from the Product Library.</p>
     <div className="space-y-3">{data.products.filter(p=>p.is_active).map(p=>{
       const item=draft.find(i=>i.product_id===p.id);
       const sizes=data.sizes.filter(s=>s.product_id===p.id).sort((a,b)=>a.display_order-b.display_order);
@@ -139,12 +142,13 @@ export default function MenusPage(){
        </div>}
       </div>;
     })}</div>
-    <button type="button" className={action} disabled={busy} onClick={()=>void save()}>{busy?'Saving…':'Save Draft Menu'}</button>
-    <button type="button" className="rounded-xl border border-emerald-800 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 disabled:opacity-50" disabled={busy||!draft.length} onClick={()=>void publish()}>Publish & Generate QR</button>
-    <p className="text-xs text-amber-800">Save changes before publishing. Published menus are viewable, but checkout is not yet enabled.</p>
-   </>:<p className="text-sm text-zinc-500">Only draft menus can be edited in this development slice.</p>}
+    <button type="button" className={action} disabled={busy} onClick={()=>void save()}>{busy?'Saving…':selectedMenu.status==='published'?'Save Published Menu':'Save Draft Menu'}</button>
+    {selectedMenu.status==='draft'&&<button type="button" className="rounded-xl border border-emerald-800 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900 disabled:opacity-50" disabled={busy||!draft.length} onClick={()=>void publish()}>Publish & Generate QR</button>}
+    <p className="text-xs text-amber-800">{selectedMenu.status==='published'?'Changes take effect immediately. Existing paid orders retain their charged prices.':'Save changes before publishing.'}</p>
+   </>:<p className="text-sm text-zinc-500">Menu cannot be edited in its current state.</p>}
    </div>}
-  {posMenuId&&<CounterPOS key={posMenuId} menuId={posMenuId} menuName={data.menus.find(m=>m.id===posMenuId)?.name||'Menu'} trackedIds={data.items.filter(i=>i.event_id===posMenuId&&i.inventory_tracking).map(i=>i.product_id)} onClose={()=>setPosMenuId(null)}/>}
+  <section className="space-y-3 rounded-2xl border bg-white p-5"><h4 className="font-semibold">Business UPI Payments</h4><p className="text-sm text-zinc-500">Used for exact-amount counter QR payments. Verify these details against the café’s real receiving account.</p><div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">UPI ID<input className={input+' mt-1'} placeholder="cafe@bank" value={upi} onChange={e=>setUpi(e.target.value)}/></label><label className="text-sm">Account / Payee name<input className={input+' mt-1'} value={payee} onChange={e=>setPayee(e.target.value)}/></label></div><button type="button" disabled={busy} onClick={()=>void saveUPI()} className={action}>Save UPI Details</button></section>
+  {posMenuId&&<CounterPOS key={posMenuId} menuId={posMenuId} menuName={data.menus.find(m=>m.id===posMenuId)?.name||'Menu'} paymentSettings={data.paymentSettings} trackedIds={data.items.filter(i=>i.event_id===posMenuId&&i.inventory_tracking).map(i=>i.product_id)} onClose={()=>setPosMenuId(null)}/>}
   {activatedMenu&&<section className="space-y-4 rounded-2xl border border-emerald-200 bg-white p-6" role="status">
     <div className="text-3xl" aria-hidden="true">✓</div><h3 className="text-xl font-semibold text-emerald-800">Menu activated successfully!</h3>
     <p className="text-sm text-zinc-600">{activatedMenu.name} now has its own public link and QR code. You can print this QR for your customers.</p>
