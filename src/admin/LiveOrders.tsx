@@ -64,7 +64,9 @@ export default function LiveOrders(){
   flushSync(()=>setPrintOrderId(orderId));
   const receipt=document.getElementById('bb-print-receipt');
   if(!receipt){setError('Could not prepare the receipt. Please try again.');return;}
+  receipt.classList.add('bb-receipt-measure');
   const mmHeight=Math.max(75,Math.ceil(receipt.scrollHeight*25.4/96)+5);
+  receipt.classList.remove('bb-receipt-measure');
   document.getElementById('bb-receipt-page-size')?.remove();
   const paperStyle=document.createElement('style');
   paperStyle.id='bb-receipt-page-size';
