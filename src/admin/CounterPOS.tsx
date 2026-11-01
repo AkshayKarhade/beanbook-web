@@ -121,8 +121,9 @@ export default function CounterPOS({
   const response=await fetch('/api/business-products?mode=menus',{
     method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(body)
   });
-  const result=await response.json();
-  if(!response.ok)throw new Error(result.error||'Request failed. Please try again.');
+  const result=await response.json().catch(()=>null);
+  if(!response.ok)throw new Error(result?.error||'Order service failed (HTTP '+response.status+'). Please retry or contact support.');
+  if(!result)throw new Error('Order service returned an invalid response. Check orders before retrying.');
   return result;
  }
  async function placeOrder(){
@@ -136,7 +137,7 @@ export default function CounterPOS({
    if(typeof receipt.orderNumber!=='string'||!Number.isFinite(Number(receipt.amount))||Number(receipt.amount)<=0)throw new Error('Order was submitted, but receipt details could not be loaded. Check Live Orders before retrying.');
    setOrderNumber(receipt.orderNumber);setAmount(Number(receipt.amount));setPaymentMethod(paymentSettings?'upi':'cash');
    setCartOpen(false);setStage('payment');
-  }catch(e){setError(e instanceof Error?e.message:'Could not place order');}
+  }catch(e){setError(e instanceof Error?e.message:'Could not place order');setCartOpen(true);}
   finally{setBusy(false);}
  }
  async function confirmPayment(){
@@ -179,6 +180,7 @@ export default function CounterPOS({
    }
   </div>
   <div className="space-y-3 border-t border-[#eeeae4] bg-[#faf9f6] p-4">
+   {error&&<div role="alert" aria-live="assertive" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">Could not confirm order: {error}</div>}
    <div className="flex items-center justify-between text-sm text-zinc-500"><span>{count} item{count===1?'':'s'}</span><span>Subtotal</span></div>
    <div className="flex items-center justify-between text-2xl font-bold"><span>Total</span><span>{money(total)}</span></div>
    <button type="button" className={primary+' w-full'} disabled={!cart.length||busy} onClick={()=>void placeOrder()}>{busy?'Placing order…':'Confirm Order · '+money(total)}</button>
