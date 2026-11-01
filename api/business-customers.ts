@@ -25,7 +25,7 @@ export default async function businessCustomers(req:Request){
    const id=new URL(req.url).searchParams.get('id');
    if(id!==null){
     if(!uuid(id))return json({error:'Invalid customer ID'},400);
-    const {data:customer,error:ce}=await db.from('customers').select('created_at').eq('id',id).eq('brand_id',membership.brand_id).maybeSingle();
+    const {data:customer,error:ce}=await db.from('customers').select('created_at,email').eq('id',id).eq('brand_id',membership.brand_id).maybeSingle();
     if(ce)throw ce;
     if(!customer)return json({error:'Customer not found'},404);
     const orders=()=>db.from('orders');
@@ -43,7 +43,7 @@ export default async function businessCustomers(req:Request){
     }
     const top=[...counts].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]))[0];
     return json({insights:{
-     customerSince:customer.created_at,firstOrderAt:first.data?.created_at||null,paidOrderCount:paid.count||0,
+     email:customer.email||null,customerSince:customer.created_at,firstOrderAt:first.data?.created_at||null,paidOrderCount:paid.count||0,
      topProduct:top?{name:top[0],quantity:top[1]}:null,topProductSampleSize:(products.data||[]).length,
      recentOrders:((recent.data||[]) as Order[]).map(o=>({
       id:o.id,number:o.order_number,createdAt:o.created_at,amount:Number(o.total_amount),paymentStatus:o.payment_status,
@@ -53,8 +53,12 @@ export default async function businessCustomers(req:Request){
    }
    const {data,error}=await db.rpc('beanbook_customer_summary',{p_brand_id:membership.brand_id});
    if(error)throw error;
+   const ids=((data||[]) as SummaryRow[]).map(r=>r.customer_id);
+   const emails=ids.length?await db.from('customers').select('id,email').eq('brand_id',membership.brand_id).in('id',ids):{data:[],error:null};
+   if(emails.error)throw emails.error;
+   const emailById=new Map((emails.data||[]).map(r=>[r.id,r.email]));
    return json({customers:((data||[]) as SummaryRow[]).map(r=>({
-    id:r.customer_id,name:r.customer_name,phone:r.phone,ltv:Number(r.lifetime_value||0),
+    id:r.customer_id,name:r.customer_name,phone:r.phone,email:emailById.get(r.customer_id)||null,ltv:Number(r.lifetime_value||0),
     orderCount:Number(r.order_count||0),latestOrderAt:r.latest_order_at
    }))});
   }
