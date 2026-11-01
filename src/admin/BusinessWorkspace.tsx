@@ -85,7 +85,7 @@ export default function BusinessWorkspace() {
   const current = nav.find((item) => item.id === section)!;
 
   return (
-    <div className="min-h-screen bg-[#f5f3ef] text-[#202923] lg:flex">
+    <div className="bb-app-theme min-h-screen bg-[#f5f3ef] text-[#202923] lg:flex">
       <aside className="border-b border-zinc-200 bg-[#1b2822] text-white lg:flex lg:min-h-screen lg:w-64 lg:flex-col lg:border-b-0">
         <div className="flex items-center justify-between gap-3 px-5 py-5 lg:px-6 lg:py-7">
           <div className="min-w-0">
