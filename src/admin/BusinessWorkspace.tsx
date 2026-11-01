@@ -111,7 +111,7 @@ export default function BusinessWorkspace() {
           </div>
           {section==='products' && <ProductsPage />}
           {section==='events' && <MenusPage />}
-          {section==='customers' && <CustomersPage />}
+          {section==='customers' && <CustomersPage canEdit={session.role==='owner'} />}
           {section==='overview' && <>
             <div className="grid gap-4 sm:grid-cols-3">
               {[['Your workspace','Connected','Business access verified'],['Operating locations','Coming in Step 3','Location-based ordering'],['Live order queue','Coming in Step 4','Real-time fulfillment']].map(([label,value,note])=><div key={label} className="rounded-2xl border border-[#e6e3dc] bg-white p-6 shadow-sm"><p className="text-sm text-zinc-500">{label}</p><p className="mt-3 text-xl font-semibold">{value}</p><p className="mt-2 text-xs text-zinc-400">{note}</p></div>)}
