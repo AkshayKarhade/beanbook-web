@@ -77,8 +77,16 @@
   to = "/beanbook/index.html"
   status = 200
 
-# The Supabase project URL is intended to be public, unlike SUPABASE_SECRET_KEY.
-# Expose it to Vite only for Deploy Previews, without storing its value in git.
+# Supabase project URL is public; keep the privileged Supabase key server-only.
+# Both production and preview builds inject the URL from Netlify build variables.
+# Do not commit the actual project URL to this file.
+[context.production]
+  command = 'VITE_SUPABASE_URL="$SUPABASE_URL" npm run build'
+
+# Omit only the intentionally public URL from Netlify's secrets scanner.
+[context.production.environment]
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL"
+
 [context.deploy-preview]
   command = 'VITE_SUPABASE_URL="$SUPABASE_URL" npm run build'
 
