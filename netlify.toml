@@ -73,60 +73,22 @@
   force = true
 
 [[redirects]]
-  from = "/api/business-menus"
-  to = "/.netlify/functions/business-menus"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/business-options"
-  to = "/.netlify/functions/business-options"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/business-customers"
-  to = "/.netlify/functions/business-customers"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/business-images"
-  to = "/.netlify/functions/business-images"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/business-bill-email"
-  to = "/.netlify/functions/business-bill-email"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/api/public-sales-menu"
-  to = "/.netlify/functions/public-sales-menu"
-  status = 200
-  force = true
-
-[[redirects]]
   from = "/beanbook/*"
   to = "/beanbook/index.html"
   status = 200
 
-# The Supabase project URL is intended to be public, unlike SUPABASE_SECRET_KEY.
-# Production client identifiers are explicit below; preview credentials must remain isolated.
+# Supabase project URL is public; keep the privileged Supabase key server-only.
+# Both production and preview builds inject the URL from Netlify build variables.
+# Do not commit the actual project URL to this file.
+[context.production]
+  command = 'VITE_SUPABASE_URL="$SUPABASE_URL" npm run build'
 
-# Public Supabase project identifiers, used by browser code only.
-# Context-scoped: do not populate Deploy Previews with production workspace config.
-# Service-role/secret keys MUST remain Netlify runtime secrets, never VITE_* values.
+# Omit only the intentionally public URL from Netlify's secrets scanner.
 [context.production.environment]
-  VITE_SUPABASE_URL = "https://ensndmoitnkuuxlxmugn.supabase.co"
-  VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_bolGKll4fwWig8JW-kMrtg_e3f-aNDP"
-  VITE_BEANBOOK_ADMIN_SUPABASE_URL = "https://ensndmoitnkuuxlxmugn.supabase.co"
-  VITE_BEANBOOK_ADMIN_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_bolGKll4fwWig8JW-kMrtg_e3f-aNDP"
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL"
 
 [context.deploy-preview]
-  command = "npm run build"
+  command = 'VITE_SUPABASE_URL="$SUPABASE_URL" npm run build'
 
 # Netlify must still scan real secrets; exempt only this intentionally public URL.
 [context.deploy-preview.environment]
