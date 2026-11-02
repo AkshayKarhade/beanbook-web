@@ -120,6 +120,9 @@
 # Context-scoped: do not populate Deploy Previews with production workspace config.
 # Service-role/secret keys MUST remain Netlify runtime secrets, never VITE_* values.
 [context.production.environment]
+  # The Supabase project URL is public and intentionally appears in the Vite client bundle.
+  # Keep scanning all secret keys (SUPABASE_SECRET_KEY, RESEND_API_KEY, RAZORPAY_*).
+  SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL"
   VITE_SUPABASE_URL = "https://ensndmoitnkuuxlxmugn.supabase.co"
   VITE_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_bolGKll4fwWig8JW-kMrtg_e3f-aNDP"
   VITE_BEANBOOK_ADMIN_SUPABASE_URL = "https://ensndmoitnkuuxlxmugn.supabase.co"
