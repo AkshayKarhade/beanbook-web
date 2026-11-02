@@ -3,7 +3,7 @@ on:
   push:
     branches: [feature/mvp1-events-regular-menus, feature/mvp1-customers-summary, feature/mvp1-live-order-tracker]
   pull_request:
-    branches: [BeanBook-MVP-1, main]
+    branches: [BeanBook-MVP-1]
   workflow_dispatch:
 jobs:
   verify:
