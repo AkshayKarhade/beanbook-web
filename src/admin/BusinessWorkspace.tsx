@@ -7,9 +7,10 @@ import MenusPage from './MenusPage';
 import CustomersPage from './CustomersPage';
 import BusinessPaymentSettings from './BusinessPaymentSettings';
 import LiveOrders from './LiveOrders';
+import CostingPage from './CostingPage';
 import { useBusinessSession } from './useBusinessSession';
 
-type Section = 'overview' | 'products' | 'orders' | 'events' | 'customers' | 'reports' | 'settings';
+type Section = 'overview' | 'products' | 'orders' | 'events' | 'customers' | 'reports' | 'settings' | 'costing';
 
 const nav: { id: Section; name: string; icon: string }[] = [
   { id: 'overview', name: 'Overview', icon: '◫' },
@@ -17,6 +18,7 @@ const nav: { id: Section; name: string; icon: string }[] = [
   { id: 'orders', name: 'Live Orders', icon: '▤' },
   { id: 'events', name: 'Events & Menus', icon: '▦' },
   { id: 'customers', name: 'Customers', icon: '♙' },
+  { id: 'costing', name: 'Costing & Inventory', icon: '▧' },
   { id: 'reports', name: 'Reports', icon: '◩' },
   { id: 'settings', name: 'Settings', icon: '⚙' },
 ];
@@ -95,7 +97,7 @@ export default function BusinessWorkspace() {
           <button type="button" onClick={() => void signOut()} className="shrink-0 rounded-xl border border-white/25 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 sm:text-sm">Sign out</button>
         </div>
         <nav aria-label="Business navigation" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-1 lg:flex-col lg:overflow-visible lg:pb-0">
-          {nav.map((item)=><button key={item.id} onClick={()=>setSection(item.id)} aria-current={section===item.id?'page':undefined} className={'flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm transition lg:w-full ' + (section === item.id ? 'bg-white/15 font-semibold text-white' : 'text-white/65 hover:bg-white/10 hover:text-white')}>
+          {nav.filter(item=>item.id!=='costing'||session.role==='owner').map((item)=><button key={item.id} onClick={()=>setSection(item.id)} aria-current={section===item.id?'page':undefined} className={'flex shrink-0 items-center gap-3 rounded-xl px-4 py-3 text-left text-sm transition lg:w-full ' + (section === item.id ? 'bg-white/15 font-semibold text-white' : 'text-white/65 hover:bg-white/10 hover:text-white')}>
             <span className="text-base" aria-hidden="true">{item.icon}</span>{item.name}
           </button>)}
         </nav>
@@ -114,6 +116,7 @@ export default function BusinessWorkspace() {
           {section==='events' && <MenusPage onReturnToLiveOrders={()=>setSection('orders')} />}
           {section==='customers' && <CustomersPage canEdit={session.role==='owner'} />}
           {section==='orders' && <LiveOrders />}
+          {section==='costing' && session.role==='owner' && <CostingPage key={session.brandId} />}
           {section==='overview' && <>
             <div className="grid gap-4 sm:grid-cols-3">
               {[['Your workspace','Connected','Business access verified'],['Live orders','Ready','Manage incoming orders and open bills'],['Events & menus','Available','Manage your menus and events']].map(([label,value,note])=><div key={label} className="rounded-2xl border border-[#e6e3dc] bg-white p-6 shadow-sm"><p className="text-sm text-zinc-500">{label}</p><p className="mt-3 text-xl font-semibold">{value}</p><p className="mt-2 text-xs text-zinc-400">{note}</p></div>)}
@@ -137,7 +140,7 @@ export default function BusinessWorkspace() {
           </div>
           <BusinessPaymentSettings />
           </div>}
-          {section!=='overview' && section!=='settings' && section!=='products' && section!=='events' && section!=='customers' && section!=='orders' && <div className="rounded-3xl border border-dashed border-[#d5d7d0] bg-white p-10 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eff4ee] text-2xl">{current.icon}</div><h3 className="mt-5 text-xl font-semibold">{current.name}</h3><p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-500">This section is not available in the current pilot.</p></div>}
+          {section!=='overview' && section!=='settings' && section!=='products' && section!=='events' && section!=='customers' && section!=='orders' && section!=='costing' && <div className="rounded-3xl border border-dashed border-[#d5d7d0] bg-white p-10 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eff4ee] text-2xl">{current.icon}</div><h3 className="mt-5 text-xl font-semibold">{current.name}</h3><p className="mx-auto mt-3 max-w-md text-sm leading-7 text-zinc-500">This section is not available in the current pilot.</p></div>}
         </main>
       </div>
     </div>
