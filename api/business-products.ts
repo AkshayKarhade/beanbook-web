@@ -6,6 +6,7 @@ import publicSalesMenu from './public-sales-menu';
 import businessCustomers from './business-customers';
 import businessOrders from './business-orders';
 import businessBillEmail from './business-bill-email';
+import businessCosting from './business-costing';
 
 
 const json = (data: unknown, status = 200) =>
@@ -32,6 +33,7 @@ function parseProduct(input: Record<string, unknown>): ProductInput | null {
 export default async function businessProducts(request: Request) {
   // Reuse the proven Products Netlify endpoint for catalogue configuration.
   // The options handler independently verifies the signed-in owner and tenant.
+  if (new URL(request.url).searchParams.get('mode') === 'costing') return businessCosting(request);
   if (new URL(request.url).searchParams.get('mode') === 'bill-email') return businessBillEmail(request);
   if (new URL(request.url).searchParams.get('mode') === 'orders') return businessOrders(request);
   if (new URL(request.url).searchParams.get('mode') === 'customers') return businessCustomers(request);
